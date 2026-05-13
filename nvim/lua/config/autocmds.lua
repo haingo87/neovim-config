@@ -55,3 +55,25 @@ autocmd({ "BufRead", "BufNewFile" }, {
 		end
 	end,
 })
+
+--- Set terminal title ---
+local title_group = augroup("SetTitle", { clear = true })
+
+local function set_title()
+	local fname = vim.fn.expand("%:t")
+	if fname == "" then
+		fname = "[No Name]"
+	end
+	if vim.g.project_dirname then
+		vim.o.titlestring = vim.g.project_dirname .. " - " .. fname
+	else
+		vim.o.titlestring = fname
+	end
+end
+
+autocmd({ "BufEnter", "BufReadPost", "BufNewFile", "FileReadPost", "FocusGained" }, {
+	group = title_group,
+	callback = set_title,
+})
+
+set_title()

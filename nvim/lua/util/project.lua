@@ -13,6 +13,7 @@ function M.detect(cwd)
 
 	if #found > 0 then
 		local path = found[1]
+		vim.g.project_dirname = vim.fn.fnamemodify(path, ":h:t")
 		local chunk, load_err = loadfile(path)
 		if chunk then
 			local ok, parsed = pcall(chunk)
@@ -28,6 +29,7 @@ function M.detect(cwd)
 		end
 	else
 		vim.g.project = nil
+		vim.g.project_dirname = nil
 	end
 
 	M.cache[cwd] = result

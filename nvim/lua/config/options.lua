@@ -22,3 +22,5 @@ vim.opt.sidescrolloff = 8
 
 vim.opt.cursorline = true
 vim.opt.colorcolumn = "120"
+
+vim.o.title = true
