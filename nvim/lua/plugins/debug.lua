@@ -13,6 +13,12 @@ return {
 			"rcarriga/nvim-dap-ui",
 			"theHamsta/nvim-dap-virtual-text",
 			"jay-babu/mason-nvim-dap.nvim",
+			{
+				"ownself/nvim-dap-unity",
+				build = function()
+					require("nvim-dap-unity").install()
+				end,
+			},
 		},
 		config = function()
 			local project = vim.g.project
@@ -32,39 +38,12 @@ return {
 
 			if project and project.env then
 				if project.env.type == "csharp" then
-					dap.adapters.coreclr = {
-						type = "executable",
-						command = "netcoredbg",
-						args = { "--interpreter=vscode" },
-					}
-					dap.configurations.cs = {
-						{
-							type = "coreclr",
-							name = "Launch - netcoredbg",
-							request = "launch",
-							program = function()
-								return vim.fn.input("Path to dll: ", vim.fn.getcwd() .. "/bin/Debug/", "file")
-							end,
-						},
-						{
-							type = "coreclr",
-							name = "Attach to Unity",
-							request = "attach",
-							processId = function()
-								local handle = io.popen("pgrep -x Unity 2>/dev/null")
-								if not handle then
-									return tonumber(vim.fn.input("Unity PID: "))
-								end
-								local result = handle:read("*a")
-								handle:close()
-								local pid = tonumber(result:match("%d+"))
-								if pid then
-									return pid
-								end
-								return tonumber(vim.fn.input("Unity PID: "))
-							end,
-						},
-					}
+					local unity_ok = pcall(require, "nvim-dap-unity")
+					if unity_ok then
+						require("nvim-dap-unity").setup({
+							auto_install_on_start = false,
+						})
+					end
 				elseif project.env.type == "cpp" then
 					dap.adapters.codelldb = {
 						type = "server",
@@ -117,12 +96,20 @@ return {
 			dap.listeners.after.event_initialized["dapui_config"] = function()
 				dapui.open()
 			end
-			dap.listeners.before.event_terminated["dapui_config"] = function()
+
+			local function close_dapui()
 				pcall(dapui.close)
+				for _, win in ipairs(vim.api.nvim_list_wins()) do
+					if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then
+						vim.api.nvim_win_set_width(win, 30)
+					end
+				end
 			end
-			dap.listeners.before.event_exited["dapui_config"] = function()
-				pcall(dapui.close)
-			end
+
+			dap.listeners.before.event_terminated["dapui_config"] = close_dapui
+			dap.listeners.before.event_exited["dapui_config"] = close_dapui
+			dap.listeners.before.disconnect["dapui_config"] = close_dapui
+			dap.listeners.before.terminate["dapui_config"] = close_dapui
 
 			require("nvim-dap-virtual-text").setup({
 				commented = true,
