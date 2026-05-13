@@ -109,6 +109,8 @@ return {
 			require("bufferline").setup({
 				options = {
 					mode = "buffers",
+					close_command = "Bdelete %d",
+					right_mouse_command = "Bdelete %d",
 					indicator = {
 						style = "none",
 					},
