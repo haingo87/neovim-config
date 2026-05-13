@@ -40,9 +40,7 @@ function M.ensure_lsp_servers()
 
 	if vim.g.project and vim.g.project.env then
 		local t = vim.g.project.env.type
-		if t == "csharp" then
-			table.insert(servers, "roslyn")
-		elseif t == "cpp" then
+		if t == "cpp" then
 			table.insert(servers, "clangd")
 		end
 	end
