@@ -59,10 +59,28 @@ autocmd({ "BufRead", "BufNewFile" }, {
 --- Set terminal title ---
 local title_group = augroup("SetTitle", { clear = true })
 
+local last_file = nil
+
+local function track_last_file()
+	local buftype = vim.bo.buftype
+	local bufname = vim.api.nvim_buf_get_name(0)
+	if buftype == "" and bufname ~= "" then
+		last_file = bufname
+	end
+end
+
 local function set_title()
-	local fname = vim.fn.expand("%:t")
-	if fname == "" then
-		fname = "[No Name]"
+	local buftype = vim.bo.buftype
+	local fname
+	if buftype == "" then
+		fname = vim.fn.expand("%:t")
+		if fname == "" then
+			fname = "[No Name]"
+		end
+	elseif last_file then
+		fname = vim.fn.fnamemodify(last_file, ":t")
+	else
+		fname = "[" .. buftype .. "]"
 	end
 	if vim.g.project_dirname then
 		vim.o.titlestring = vim.g.project_dirname .. " - " .. fname
@@ -73,7 +91,11 @@ end
 
 autocmd({ "BufEnter", "BufReadPost", "BufNewFile", "FileReadPost", "FocusGained" }, {
 	group = title_group,
-	callback = set_title,
+	callback = function()
+		track_last_file()
+		set_title()
+	end,
 })
 
+track_last_file()
 set_title()
