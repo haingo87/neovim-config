@@ -33,23 +33,6 @@ local project_group = augroup("ProjectDetection", { clear = true })
 
 local last_cwd = nil
 
---- Prevent leaving an active project root ---
-autocmd("DirChangedPre", {
-	group = project_group,
-	callback = function()
-		local p = require("util.project")
-		if not p.project_root or not vim.v.event.cwd then
-			return
-		end
-		local new_cwd = vim.fs.normalize(vim.v.event.cwd)
-		local root = vim.fs.normalize(p.project_root)
-		if new_cwd ~= root and not vim.startswith(new_cwd, root .. "/") then
-			vim.notify("[project] Locked to " .. root .. ". Use :ProjectReload to switch.", vim.log.levels.WARN)
-			error("Directory change blocked by active project")
-		end
-	end,
-})
-
 autocmd({ "BufEnter", "DirChanged" }, {
 	group = project_group,
 	callback = function()

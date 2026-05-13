@@ -48,6 +48,7 @@ return {
 					},
 				},
 				filesystem = {
+					bind_to_cwd = false,
 					filtered_items = {
 						visible = false,
 						hide_dotfiles = false,

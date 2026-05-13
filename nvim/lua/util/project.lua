@@ -1,7 +1,6 @@
 local M = {}
 
 M.cache = {}
-M.project_root = nil
 
 function M.detect(cwd)
 	local cached = M.cache[cwd]
@@ -14,7 +13,6 @@ function M.detect(cwd)
 
 	if #found > 0 then
 		local path = found[1]
-		M.project_root = vim.fn.fnamemodify(path, ":h")
 		local chunk, load_err = loadfile(path)
 		if chunk then
 			local ok, parsed = pcall(chunk)
@@ -30,7 +28,6 @@ function M.detect(cwd)
 		end
 	else
 		vim.g.project = nil
-		M.project_root = nil
 	end
 
 	M.cache[cwd] = result
