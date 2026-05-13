@@ -80,7 +80,16 @@ local function set_title()
 	elseif last_file then
 		fname = vim.fn.fnamemodify(last_file, ":t")
 	else
-		fname = "[" .. buftype .. "]"
+		local bufs = vim.fn.getbufinfo({ buflisted = 1 })
+		for _, buf in ipairs(bufs) do
+			if buf.name ~= "" and vim.fn.bufwinid(buf.bufnr) ~= -1 then
+				fname = vim.fn.fnamemodify(buf.name, ":t")
+				break
+			end
+		end
+		if not fname then
+			fname = "[No Name]"
+		end
 	end
 	if vim.g.project_dirname then
 		vim.o.titlestring = vim.g.project_dirname .. " - " .. fname
