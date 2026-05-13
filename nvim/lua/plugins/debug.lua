@@ -9,6 +9,7 @@ return {
 			{ "<S-F11>", function() require("dap").step_out() end, mode = "n", desc = "Debug: Step out" },
 		},
 		dependencies = {
+			"nvim-neotest/nvim-nio",
 			"rcarriga/nvim-dap-ui",
 			"theHamsta/nvim-dap-virtual-text",
 			"jay-babu/mason-nvim-dap.nvim",
@@ -20,6 +21,14 @@ return {
 			end
 
 			local dap = require("dap")
+
+			local vscode = require("dap.ext.vscode")
+			local orig_getconfigs = vscode.getconfigs
+			vscode.getconfigs = function(path)
+				local ok, result = pcall(orig_getconfigs, path)
+				if ok then return result end
+				return {}
+			end
 
 			if project and project.env then
 				if project.env.type == "csharp" then
@@ -35,6 +44,24 @@ return {
 							request = "launch",
 							program = function()
 								return vim.fn.input("Path to dll: ", vim.fn.getcwd() .. "/bin/Debug/", "file")
+							end,
+						},
+						{
+							type = "coreclr",
+							name = "Attach to Unity",
+							request = "attach",
+							processId = function()
+								local handle = io.popen("pgrep -x Unity 2>/dev/null")
+								if not handle then
+									return tonumber(vim.fn.input("Unity PID: "))
+								end
+								local result = handle:read("*a")
+								handle:close()
+								local pid = tonumber(result:match("%d+"))
+								if pid then
+									return pid
+								end
+								return tonumber(vim.fn.input("Unity PID: "))
 							end,
 						},
 					}
@@ -91,10 +118,10 @@ return {
 				dapui.open()
 			end
 			dap.listeners.before.event_terminated["dapui_config"] = function()
-				dapui.close()
+				pcall(dapui.close)
 			end
 			dap.listeners.before.event_exited["dapui_config"] = function()
-				dapui.close()
+				pcall(dapui.close)
 			end
 
 			require("nvim-dap-virtual-text").setup({
