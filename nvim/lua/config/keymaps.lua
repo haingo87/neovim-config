@@ -20,12 +20,6 @@ map("n", "<C-S-k>", "<cmd>delete<CR>", { desc = "Delete line" })
 map("i", "<C-S-k>", "<C-o>dd", { desc = "Delete line" })
 
 --- Window / Split Management ---
-map("n", "<C-h>", "<C-w>h", { desc = "Left window" })
-map("n", "<C-j>", "<C-w>j", { desc = "Below window" })
-map("n", "<C-k>", "<C-w>k", { desc = "Above window" })
-map("n", "<C-l>", "<C-w>l", { desc = "Right window" })
-map("n", "<C-s>", "<cmd>split<CR>", { desc = "Horizontal split" })
-map("n", "<C-v>", "<cmd>vsplit<CR>", { desc = "Vertical split" })
 
 --- Terminal ---
 map("n", "<C-`>", "<cmd>ToggleTerm direction=horizontal<CR>", { desc = "Toggle terminal" })
