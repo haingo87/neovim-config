@@ -1,16 +1,7 @@
 return {
 	{
 		"famiu/bufdelete.nvim",
-		keys = {
-			{ "<C-w>", function()
-				require("bufdelete").bufdelete(0, false)
-			end, desc = "Close buffer" },
-		},
-		config = function()
-			vim.keymap.set("n", "<C-w>", function()
-				require("bufdelete").bufdelete(0, false)
-			end, { desc = "Close buffer" })
-		end,
+		event = "VeryLazy",
 	},
 
 	{
