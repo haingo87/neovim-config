@@ -5,6 +5,10 @@ return {
 		build = ":MasonUpdate",
 		config = function()
 			require("mason").setup({
+				registries = {
+					"github:mason-org/mason-registry",
+					"github:Crashdummyy/mason-registry",
+				},
 				ui = {
 					border = "rounded",
 					icons = {
@@ -75,6 +79,16 @@ return {
 			})
 
 			vim.lsp.enable({ "lua_ls", "jsonls", "yamlls", "marksman" })
+
+			if vim.g.project and vim.g.project.env then
+				local t = vim.g.project.env.type
+				if t == "csharp" then
+					vim.lsp.config("roslyn", {
+						cmd = { "roslyn" },
+						filetypes = { "cs" },
+					})
+				end
+			end
 
 			if vim.g.project and vim.g.project.env and vim.g.project.env.type == "cpp" then
 				vim.lsp.config("clangd", {
