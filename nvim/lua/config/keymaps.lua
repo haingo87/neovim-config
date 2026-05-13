@@ -2,9 +2,9 @@ local map = vim.keymap.set
 
 --- File / Buffer Operations ---
 map("n", "<C-w>", function()
-	if #vim.fn.getbufinfo({ buflisted = 1 }) > 1 then
-		vim.cmd("bd")
-	end
+	local bufnr = vim.api.nvim_get_current_buf()
+	vim.cmd("enew")
+	vim.cmd("bd " .. bufnr)
 end, { desc = "Close buffer" })
 map("n", "<C-t>", "<cmd>Telescope find_files<CR>", { desc = "Find files" })
 map("n", "<C-S-f>", "<cmd>Telescope live_grep<CR>", { desc = "Live grep" })
