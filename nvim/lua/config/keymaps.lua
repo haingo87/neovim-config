@@ -1,11 +1,6 @@
 local map = vim.keymap.set
 
 --- File / Buffer Operations ---
-map("n", "<C-w>", function()
-	local bufnr = vim.api.nvim_get_current_buf()
-	vim.cmd("enew")
-	pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-end, { desc = "Close buffer" })
 map("n", "<C-t>", "<cmd>Telescope find_files<CR>", { desc = "Find files" })
 map("n", "<C-S-f>", "<cmd>Telescope live_grep<CR>", { desc = "Live grep" })
 map("n", "<C-S-p>", "<cmd>Telescope commands<CR>", { desc = "Commands" })
