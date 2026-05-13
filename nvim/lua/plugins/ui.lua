@@ -70,12 +70,6 @@ return {
 			require("gitsigns").setup({
 				signcolumn = true,
 				numhl = false,
-				current_line_blame = true,
-				current_line_blame_opts = {
-					virt_text = true,
-					virt_text_pos = "eol",
-					delay = 1000,
-				},
 				on_attach = function(bufnr)
 					local gs = package.loaded.gitsigns
 					local map = function(mode, l, r, opts)
