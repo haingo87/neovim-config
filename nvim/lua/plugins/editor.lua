@@ -73,6 +73,15 @@ return {
 		},
 		config = function()
 			local telescope = require("telescope")
+			local find_command = { "rg", "--files", "--hidden", "--glob", "!**/.git/*" }
+			local grep_args = { "--hidden" }
+
+			if vim.g.project and vim.g.project.env and vim.g.project.env.type == "csharp" then
+				vim.list_extend(find_command, { "--glob", "!*.meta" })
+				table.insert(grep_args, "--glob")
+				table.insert(grep_args, "!*.meta")
+			end
+
 			telescope.setup({
 				defaults = {
 					layout_strategy = "vertical",
@@ -89,10 +98,10 @@ return {
 				pickers = {
 					find_files = {
 						hidden = true,
-						find_command = { "rg", "--files", "--hidden", "--glob", "!**/.git/*" },
+						find_command = find_command,
 					},
 					live_grep = {
-						additional_args = { "--hidden" },
+						additional_args = grep_args,
 					},
 				},
 			})
