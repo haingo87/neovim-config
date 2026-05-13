@@ -32,25 +32,3 @@ map("n", "<leader>fg", "<cmd>Telescope live_grep<CR>", { desc = "Live grep" })
 map("n", "<leader>fb", "<cmd>Telescope buffers<CR>", { desc = "Find buffers" })
 map("n", "<leader>fh", "<cmd>Telescope help_tags<CR>", { desc = "Help tags" })
 map("n", "<leader>fs", "<cmd>Telescope lsp_document_symbols<CR>", { desc = "Document symbols" })
-
---- Debug (DAP) ---
-map("n", "<F5>", function()
-	local ok, dap = pcall(require, "dap")
-	if ok then dap.continue() end
-end, { desc = "Debug: Continue" })
-map("n", "<F9>", function()
-	local ok, dap = pcall(require, "dap")
-	if ok then dap.toggle_breakpoint() end
-end, { desc = "Debug: Toggle breakpoint" })
-map("n", "<F10>", function()
-	local ok, dap = pcall(require, "dap")
-	if ok then dap.step_over() end
-end, { desc = "Debug: Step over" })
-map("n", "<F11>", function()
-	local ok, dap = pcall(require, "dap")
-	if ok then dap.step_into() end
-end, { desc = "Debug: Step into" })
-map("n", "<S-F11>", function()
-	local ok, dap = pcall(require, "dap")
-	if ok then dap.step_out() end
-end, { desc = "Debug: Step out" })

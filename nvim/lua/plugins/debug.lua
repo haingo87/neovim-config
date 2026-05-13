@@ -2,11 +2,11 @@ return {
 	{
 		"mfussenegger/nvim-dap",
 		keys = {
-			{ "<F5>", mode = "n" },
-			{ "<F9>", mode = "n" },
-			{ "<F10>", mode = "n" },
-			{ "<F11>", mode = "n" },
-			{ "<S-F11>", mode = "n" },
+			{ "<F5>", function() require("dap").continue() end, mode = "n", desc = "Debug: Continue" },
+			{ "<F9>", function() require("dap").toggle_breakpoint() end, mode = "n", desc = "Debug: Toggle breakpoint" },
+			{ "<F10>", function() require("dap").step_over() end, mode = "n", desc = "Debug: Step over" },
+			{ "<F11>", function() require("dap").step_into() end, mode = "n", desc = "Debug: Step into" },
+			{ "<S-F11>", function() require("dap").step_out() end, mode = "n", desc = "Debug: Step out" },
 		},
 		dependencies = {
 			"rcarriga/nvim-dap-ui",
