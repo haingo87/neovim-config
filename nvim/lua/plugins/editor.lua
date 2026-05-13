@@ -27,6 +27,18 @@ return {
 			"MunifTanjim/nui.nvim",
 		},
 		config = function()
+			local never_show = { ".DS_Store", "thumbs.db", ".git", "node_modules", "__pycache__" }
+			local never_show_patterns = { "*.meta", "*.asset" }
+
+			if vim.g.project and vim.g.project.exclude then
+				if vim.g.project.exclude.files then
+					vim.list_extend(never_show_patterns, vim.g.project.exclude.files)
+				end
+				if vim.g.project.exclude.dirs then
+					vim.list_extend(never_show, vim.g.project.exclude.dirs)
+				end
+			end
+
 			require("neo-tree").setup({
 				close_if_last_window = true,
 				window = {
@@ -40,17 +52,8 @@ return {
 						visible = false,
 						hide_dotfiles = false,
 						hide_gitignored = true,
-						never_show = {
-							".DS_Store",
-							"thumbs.db",
-							".git",
-							"node_modules",
-							"__pycache__",
-						},
-						never_show_by_pattern = {
-							"*.meta",
-							"*.asset",
-						},
+						never_show = never_show,
+						never_show_by_pattern = never_show_patterns,
 					},
 				},
 			})
@@ -76,10 +79,25 @@ return {
 			local find_command = { "rg", "--files", "--hidden", "--glob", "!**/.git/*" }
 			local grep_args = { "--hidden" }
 
-			if vim.g.project and vim.g.project.env and vim.g.project.env.type == "csharp" then
-				vim.list_extend(find_command, { "--glob", "!*.meta" })
-				table.insert(grep_args, "--glob")
-				table.insert(grep_args, "!*.meta")
+			local file_patterns = { "*.meta", "*.asset" }
+			local dir_names = {}
+
+			if vim.g.project and vim.g.project.exclude then
+				if vim.g.project.exclude.files then
+					vim.list_extend(file_patterns, vim.g.project.exclude.files)
+				end
+				if vim.g.project.exclude.dirs then
+					vim.list_extend(dir_names, vim.g.project.exclude.dirs)
+				end
+			end
+
+			for _, pattern in ipairs(file_patterns) do
+				vim.list_extend(find_command, { "--glob", "!" .. pattern })
+				vim.list_extend(grep_args, { "--glob", "!" .. pattern })
+			end
+			for _, dir in ipairs(dir_names) do
+				vim.list_extend(find_command, { "--glob", "!" .. dir .. "/**" })
+				vim.list_extend(grep_args, { "--glob", "!" .. dir .. "/**" })
 			end
 
 			telescope.setup({
