@@ -13,18 +13,18 @@ function M.detect(cwd)
 
 	if #found > 0 then
 		local path = found[1]
-		local ok, content = pcall(loadfile(path))
-		if ok and type(content) == "function" then
-			local ok2, parsed = pcall(content)
-			if ok2 and type(parsed) == "table" then
+		local chunk, load_err = loadfile(path)
+		if chunk then
+			local ok, parsed = pcall(chunk)
+			if ok and type(parsed) == "table" then
 				result = parsed
 				vim.g.project = parsed
 				vim.notify("[project] Loaded " .. path, vim.log.levels.INFO)
 			else
-				vim.notify("[project] Failed to parse " .. path, vim.log.levels.WARN)
+				vim.notify("[project] Failed to parse " .. path .. ": " .. tostring(parsed), vim.log.levels.WARN)
 			end
 		else
-			vim.notify("[project] Failed to load " .. path, vim.log.levels.WARN)
+			vim.notify("[project] Failed to load " .. path .. ": " .. tostring(load_err), vim.log.levels.WARN)
 		end
 	else
 		vim.g.project = nil
