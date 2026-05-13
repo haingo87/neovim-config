@@ -38,7 +38,7 @@ autocmd("DirChangedPre", {
 	group = project_group,
 	callback = function()
 		local p = require("util.project")
-		if not p.project_root then
+		if not p.project_root or not vim.v.event.cwd then
 			return
 		end
 		local new_cwd = vim.fs.normalize(vim.v.event.cwd)
