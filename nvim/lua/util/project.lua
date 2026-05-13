@@ -41,9 +41,12 @@ function M.ensure_lsp_servers()
 	if vim.g.project and vim.g.project.env then
 		local t = vim.g.project.env.type
 		if t == "csharp" then
-			vim.schedule(function()
-				vim.cmd("MasonInstall roslyn")
-			end)
+			local ok, registry = pcall(require, "mason-registry")
+			if ok and not registry.is_installed("roslyn") then
+				vim.schedule(function()
+					vim.cmd("MasonInstall roslyn")
+				end)
+			end
 		elseif t == "cpp" then
 			table.insert(servers, "clangd")
 		end
