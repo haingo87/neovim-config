@@ -103,7 +103,7 @@ return {
 		config = function()
 			require("bufferline").setup({
 				options = {
-					mode = "tabs",
+					mode = "buffers",
 					indicator = {
 						style = "none",
 					},
