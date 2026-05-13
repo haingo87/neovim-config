@@ -6,8 +6,8 @@ map("n", "<leader>w", "<cmd>Bdelete<CR>", { desc = "Close buffer" })
 map("n", "<C-t>", ":Telescope find_files<CR>", { desc = "Find files" })
 map("n", "<C-S-f>", "<cmd>Telescope live_grep<CR>", { desc = "Live grep" })
 map("n", "<C-S-p>", "<cmd>Telescope commands<CR>", { desc = "Commands" })
-map("n", "<C-Tab>", "<cmd>bnext<CR>", { desc = "Next buffer" })
-map("n", "<C-S-Tab>", "<cmd>bprevious<CR>", { desc = "Previous buffer" })
+map("n", "]b", "<cmd>bnext<CR>", { desc = "Next buffer" })
+map("n", "[b", "<cmd>bprevious<CR>", { desc = "Previous buffer" })
 
 --- Editor ---
 map("n", "<A-Down>", "<cmd>move +1<CR>==", { desc = "Move line down" })

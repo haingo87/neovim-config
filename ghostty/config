@@ -1,10 +1,7 @@
-theme = catppuccin-mocha
 font-family = JetBrains Mono
 font-size = 14
-background-opacity = 0.95
+background-opacity = 1.0
 window-decoration = auto
 macos-option-as-alt = left
 
 keybind = super+comma=ignore
-keybind = ctrl+tab=unbind
-keybind = ctrl+shift+tab=unbind
