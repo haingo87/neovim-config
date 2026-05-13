@@ -6,6 +6,5 @@ window-decoration = auto
 macos-option-as-alt = left
 
 keybind = super+comma=ignore
-keybind = ctrl+w=ignore
 keybind = ctrl+tab=unbind
 keybind = ctrl+shift+tab=unbind
