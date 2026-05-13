@@ -84,7 +84,14 @@ return {
 				local t = vim.g.project.env.type
 				if t == "csharp" then
 					vim.lsp.config("roslyn", {
-						cmd = { "roslyn" },
+						cmd = {
+							"roslyn",
+							"--logLevel",
+							"Information",
+							"--extensionLogDirectory",
+							vim.fs.joinpath(vim.uv.os_tmpdir(), "roslyn/logs"),
+							"--stdio",
+						},
 						filetypes = { "cs" },
 					})
 				end
