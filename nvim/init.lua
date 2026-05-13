@@ -31,21 +31,10 @@ vim.api.nvim_create_user_command("ProjectReload", function()
 	project.ensure_lsp_servers()
 	project.ensure_dap_adapters()
 
-	local lspconfig = require("lspconfig")
 	local capabilities = require("cmp_nvim_lsp").default_capabilities(
 		vim.lsp.protocol.make_client_capabilities()
 	)
-
-	if vim.g.project and vim.g.project.env and vim.g.project.env.type == "cpp" then
-		for _, client in pairs(vim.lsp.get_clients({ name = "clangd" })) do
-			client.stop()
-		end
-		lspconfig.clangd.setup({
-			capabilities = capabilities,
-			cmd = { "clangd", "--background-index", "--clang-tidy", "--completion-style=detailed" },
-			init_options = { usePlaceholders = true, completeUnimported = true, clangdFileStatus = true },
-		})
-	end
+	project.setup_clangd(capabilities)
 
 	vim.cmd("Lazy reload seblj/roslyn.nvim")
 	vim.cmd("Lazy reload stevearc/conform.nvim")

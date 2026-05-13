@@ -84,23 +84,7 @@ return {
 			end
 
 			--- Conditional: clangd (C++ projects) ---
-			if vim.g.project and vim.g.project.env and vim.g.project.env.type == "cpp" then
-				lspconfig.clangd.setup({
-					capabilities = capabilities,
-					on_attach = on_attach,
-					cmd = {
-						"clangd",
-						"--background-index",
-						"--clang-tidy",
-						"--completion-style=detailed",
-					},
-					init_options = {
-						usePlaceholders = true,
-						completeUnimported = true,
-						clangdFileStatus = true,
-					},
-				})
-			end
+			require("util.project").setup_clangd(capabilities, on_attach)
 		end,
 	},
 

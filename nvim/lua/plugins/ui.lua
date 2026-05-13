@@ -15,7 +15,6 @@ return {
 					lualine = true,
 					mason = true,
 					neotree = true,
-					noice = false,
 					dap = { enabled = true, enable_ui = true },
 					telescope = { enabled = true },
 					todo_comments = true,
