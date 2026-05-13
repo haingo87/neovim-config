@@ -35,56 +35,63 @@ return {
 			"hrsh7th/cmp-nvim-lsp",
 		},
 		config = function()
-			local lspconfig = require("lspconfig")
-			local capabilities = vim.lsp.protocol.make_client_capabilities()
-			capabilities = require("cmp_nvim_lsp").default_capabilities(capabilities)
+			local capabilities = require("cmp_nvim_lsp").default_capabilities(
+				vim.lsp.protocol.make_client_capabilities()
+			)
+			vim.lsp.config("*", { capabilities = capabilities })
 
-			local on_attach = function(client, bufnr)
-				local map = function(mode, lhs, rhs, desc)
-					vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, desc = desc })
-				end
+			vim.api.nvim_create_autocmd("LspAttach", {
+				callback = function(args)
+					local bufnr = args.buf
+					local map = function(mode, lhs, rhs, desc)
+						vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, desc = desc })
+					end
 
-				map("n", "<S-A-F>", vim.lsp.buf.format, "Format document")
-				map("n", "<F12>", vim.lsp.buf.definition, "Go to definition")
-				map("n", "<C-F12>", vim.lsp.buf.implementation, "Go to implementation")
-				map("n", "<S-F12>", vim.lsp.buf.references, "Find references")
-				map("n", "<F2>", vim.lsp.buf.rename, "Rename symbol")
-				map("n", "<C-.>", vim.lsp.buf.code_action, "Code action")
-				map("n", "<C-S-.>", function() vim.diagnostic.goto_next({ wrap = false }) end, "Next diagnostic")
-				map("n", "<S-K>", vim.lsp.buf.hover, "Hover docs")
+					map("n", "<S-A-F>", vim.lsp.buf.format, "Format document")
+					map("n", "<F12>", vim.lsp.buf.definition, "Go to definition")
+					map("n", "<C-F12>", vim.lsp.buf.implementation, "Go to implementation")
+					map("n", "<S-F12>", vim.lsp.buf.references, "Find references")
+					map("n", "<F2>", vim.lsp.buf.rename, "Rename symbol")
+					map("n", "<C-.>", vim.lsp.buf.code_action, "Code action")
+					map("n", "<C-S-.>", function() vim.diagnostic.goto_next({ wrap = false }) end, "Next diagnostic")
+					map("n", "<S-K>", vim.lsp.buf.hover, "Hover docs")
+					map("n", "<leader>ca", vim.lsp.buf.code_action, "Code action")
+					map("n", "<leader>rn", vim.lsp.buf.rename, "Rename")
+				end,
+			})
 
-				map("n", "<leader>ca", vim.lsp.buf.code_action, "Code action")
-				map("n", "<leader>rn", vim.lsp.buf.rename, "Rename")
-			end
-
-			local always_servers = {
-				lua_ls = {
-					settings = {
-						Lua = {
-							runtime = { version = "LuaJIT" },
-							diagnostics = { globals = { "vim" } },
-							workspace = {
-								library = vim.api.nvim_get_runtime_file("", true),
-								checkThirdParty = false,
-							},
-							telemetry = { enable = false },
+			vim.lsp.config("lua_ls", {
+				settings = {
+					Lua = {
+						runtime = { version = "LuaJIT" },
+						diagnostics = { globals = { "vim" } },
+						workspace = {
+							library = vim.api.nvim_get_runtime_file("", true),
+							checkThirdParty = false,
 						},
+						telemetry = { enable = false },
 					},
 				},
-				jsonls = {},
-				yamlls = {},
-				marksman = {},
-			}
+			})
 
-			for server, cfg in pairs(always_servers) do
-				lspconfig[server].setup(vim.tbl_extend("force", {
-					capabilities = capabilities,
-					on_attach = on_attach,
-				}, cfg))
+			vim.lsp.enable({ "lua_ls", "jsonls", "yamlls", "marksman" })
+
+			if vim.g.project and vim.g.project.env and vim.g.project.env.type == "cpp" then
+				vim.lsp.config("clangd", {
+					cmd = {
+						"clangd",
+						"--background-index",
+						"--clang-tidy",
+						"--completion-style=detailed",
+					},
+					init_options = {
+						usePlaceholders = true,
+						completeUnimported = true,
+						clangdFileStatus = true,
+					},
+				})
+				vim.lsp.enable("clangd")
 			end
-
-			--- Conditional: clangd (C++ projects) ---
-			require("util.project").setup_clangd(capabilities, on_attach)
 		end,
 	},
 

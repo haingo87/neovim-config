@@ -81,31 +81,4 @@ function M.ensure_dap_adapters()
 	end
 end
 
-function M.setup_clangd(capabilities, on_attach)
-	if not vim.g.project or not vim.g.project.env or vim.g.project.env.type ~= "cpp" then
-		return
-	end
-
-	for _, client in pairs(vim.lsp.get_clients({ name = "clangd" })) do
-		client.stop()
-	end
-
-	local lspconfig = require("lspconfig")
-	lspconfig.clangd.setup({
-		capabilities = capabilities,
-		on_attach = on_attach,
-		cmd = {
-			"clangd",
-			"--background-index",
-			"--clang-tidy",
-			"--completion-style=detailed",
-		},
-		init_options = {
-			usePlaceholders = true,
-			completeUnimported = true,
-			clangdFileStatus = true,
-		},
-	})
-end
-
 return M
