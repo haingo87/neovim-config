@@ -1,7 +1,8 @@
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
-require("util.project").detect(vim.fn.getcwd())
+vim.g.initial_cwd = vim.fn.getcwd()
+require("util.project").detect(vim.g.initial_cwd)
 
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then

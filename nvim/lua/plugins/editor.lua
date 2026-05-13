@@ -45,6 +45,14 @@ return {
 					width = 30,
 					mappings = {
 						["<C-n>"] = "close_window",
+						["<bs>"] = function()
+							local commands = require("neo-tree.sources.filesystem.commands")
+							local state = require("neo-tree.sources.manager").get_state("filesystem")
+							if not state or state.path == vim.g.initial_cwd then
+								return
+							end
+							commands.navigate_up(state)
+						end,
 					},
 				},
 				filesystem = {
