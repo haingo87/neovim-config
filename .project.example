@@ -1,0 +1,24 @@
+-- Copy this file to your project root and rename to `.project`
+-- Remove or comment out sections you don't need
+
+-- Example: C# / Unity project
+return {
+	env = {
+		type = "csharp",   -- "csharp" | "cpp"
+	},
+	features = {
+		debug = true,           -- nvim-dap + dap-ui + adapters
+		format_on_save = true,  -- conform.nvim auto-format on save
+	},
+}
+
+-- Example: C++ / CMake project
+-- return {
+-- 	env = {
+-- 		type = "cpp",
+-- 	},
+-- 	features = {
+-- 		debug = true,
+-- 		format_on_save = true,
+-- 	},
+-- }
