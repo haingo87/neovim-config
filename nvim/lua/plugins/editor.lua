@@ -115,6 +115,11 @@ return {
 			telescope.setup({
 				defaults = {
 					layout_strategy = "vertical",
+					preview = {
+						treesitter = {
+							enable = false,
+						},
+					},
 					sorting_strategy = "ascending",
 					preview_title = false,
 					border = true,

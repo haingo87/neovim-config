@@ -166,8 +166,14 @@ vim.api.nvim_create_user_command("ProjectReload", function()
 		vim.lsp.enable("clangd")
 	end
 
-	vim.cmd("Lazy reload seblj/roslyn.nvim")
-	vim.cmd("Lazy reload stevearc/conform.nvim")
-	vim.cmd("Lazy reload mfussenegger/nvim-dap")
+	if vim.g.project and vim.g.project.env then
+		if vim.g.project.env.type == "csharp" then
+			pcall(require("lazy.core.loader").reload, "roslyn.nvim")
+		end
+		if vim.g.project.env.type == "csharp" or vim.g.project.env.type == "cpp" then
+			pcall(require("lazy.core.loader").reload, "conform.nvim")
+		end
+	end
+	pcall(require("lazy.core.loader").reload, "nvim-dap")
 	vim.notify("[project] Environment reloaded", vim.log.levels.INFO)
 end, {})
