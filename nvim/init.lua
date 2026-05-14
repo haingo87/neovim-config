@@ -45,7 +45,8 @@ if not already_listening then
 	end
 end
 
-local should_register = vim.g.nvim_socket_name ~= nil and not vim.g.neovim_orphan_group
+local should_register = not vim.g.neovim_orphan_group
+vim.g.daemon_registered = false
 
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -72,7 +73,29 @@ vim.api.nvim_create_autocmd("UIEnter", {
 	once = true,
 	callback = function()
 		if should_register then
-			require("util.session").register(project_root, vim.g.nvim_socket_name)
+			local session = require("util.session")
+			local result = session.register(project_root, vim.g.nvim_socket_name)
+			if result == false then
+				-- Daemon unreachable — instance works standalone but isn't routable
+				return
+			end
+			if type(result) == "table" and result.status == "dup" then
+				-- Duplicate instance for same project — route files and exit
+				local redirect = require("util.redirect")
+				local args = vim.v.argv or {}
+				for _, arg in ipairs(args) do
+					if arg:match("^/") or arg:match("^%.") then
+						vim.fn.system({ "nvim", "--server", result.socket, "--remote", arg })
+					end
+				end
+				redirect.bring_to_front()
+				vim.cmd("qa!")
+				return
+			end
+			vim.g.daemon_registered = true
+		else
+			local session = require("util.session")
+			session.register(project_root, vim.g.nvim_socket_name, true)
 		end
 		if not vim.g.neovim_orphan_group then
 			vim.schedule(function()
@@ -85,8 +108,8 @@ vim.api.nvim_create_autocmd("UIEnter", {
 vim.api.nvim_create_autocmd("VimLeave", {
 	once = true,
 	callback = function()
-		if should_register then
-			require("util.session").unregister(project_root, vim.g.nvim_socket_name)
+		if vim.g.daemon_registered then
+			require("util.session").unregister(vim.g.nvim_socket_name)
 		end
 		pcall(os.remove, socket_name)
 	end,
