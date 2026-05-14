@@ -12,6 +12,7 @@ import os
 import signal
 import socket
 import subprocess
+import select
 import sys
 import time
 
@@ -238,7 +239,11 @@ class Daemon:
 
         self.last_activity = time.time()
         handler = self.COMMANDS[cmd]
-        return handler(self, msg)
+        try:
+            return handler(self, msg)
+        except Exception as e:
+            self.log.error("Handler error for cmd=%s: %s", cmd, e)
+            return {"status": "error", "message": f"handler error: {e}"}
 
     def _process_buffer(self, sock):
         """Process complete lines from a connection's buffer. Returns responses to send."""
@@ -268,8 +273,6 @@ class Daemon:
             f.write(str(os.getpid()))
 
         self.log.info("Daemon started on %s pid=%d", self.socket_path, os.getpid())
-
-        import select
 
         try:
             while True:
@@ -310,6 +313,12 @@ class Daemon:
             self.log.info("Interrupted, shutting down")
         finally:
             self._save_sessions()
+            for sock in list(self.connections.keys()):
+                self.connections.pop(sock, None)
+                try:
+                    sock.close()
+                except OSError:
+                    pass
             self.server_socket.close()
             if os.path.exists(self.socket_path):
                 os.unlink(self.socket_path)
