@@ -10,6 +10,10 @@ return {
 		debug = true,           -- nvim-dap + dap-ui + adapters
 		format_on_save = true,  -- conform.nvim auto-format on save
 	},
+	exclude = {
+		files = { "*.meta" },                        -- hide in neo-tree + telescope
+		dirs = { "Library", "Temp", "Build", "obj" }, -- hide in neo-tree + telescope
+	},
 }
 
 -- Example: C++ / CMake project
@@ -20,5 +24,9 @@ return {
 -- 	features = {
 -- 		debug = true,
 -- 		format_on_save = true,
+-- 	},
+-- 	exclude = {
+-- 		files = {},
+-- 		dirs = { "build", ".cache" },
 -- 	},
 -- }
