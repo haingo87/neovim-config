@@ -1,0 +1,355 @@
+#!/usr/bin/env python3
+"""
+nvim-daemon — persistent instance manager for Neovim file routing.
+
+Manages a registry of running Neovim instances over a Unix domain socket
+using JSON-lines protocol. Started on-demand by nvim-open.
+"""
+import argparse
+import json
+import logging
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+SOCKET_DIR = os.path.join(
+    os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+    "nvim",
+)
+DAEMON_SOCKET = os.path.join(SOCKET_DIR, "daemon.sock")
+DAEMON_PID = os.path.join(SOCKET_DIR, "daemon.pid")
+SESSIONS_FILE = os.path.join(SOCKET_DIR, "sessions.json")
+LOG_FILE = os.path.join(SOCKET_DIR, "daemon.log")
+
+IDLE_TIMEOUT = 300  # 5 minutes
+
+
+class Instance:
+    """A registered Neovim instance."""
+    def __init__(self, pid, project_root, socket, orphan=False, start_time=None):
+        self.pid = pid
+        self.project_root = project_root
+        self.socket = socket
+        self.orphan = orphan
+        self.start_time = start_time or time.time()
+
+    def to_dict(self):
+        return {
+            "pid": self.pid,
+            "project_root": self.project_root,
+            "socket": self.socket,
+            "orphan": self.orphan,
+            "start_time": self.start_time,
+        }
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(
+            pid=d.get("pid", 0),
+            project_root=d["project_root"],
+            socket=d["socket"],
+            orphan=d.get("orphan", False),
+            start_time=d.get("start_time", time.time()),
+        )
+
+
+class Daemon:
+    def __init__(self, socket_path=DAEMON_SOCKET, log_file=None, test_mode=False):
+        self.socket_path = socket_path
+        self.state_dir = os.path.dirname(os.path.abspath(socket_path))
+        self.sessions_file = os.path.join(self.state_dir, "sessions.json")
+        self.pid_file = os.path.join(self.state_dir, "daemon.pid")
+
+        self.instances = []
+        self.last_activity = time.time()
+        self.test_mode = test_mode
+        self.server_socket = None
+        self.connections = {}  # socket object -> buffer string
+
+        log_path = log_file or os.path.join(self.state_dir, "daemon.log")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        logging.basicConfig(
+            filename=log_path,
+            level=logging.DEBUG,
+            format="%(asctime)s %(levelname)s %(message)s",
+        )
+        self.log = logging.getLogger("nvim-daemon")
+
+    def _prune_dead(self):
+        """Remove entries whose PID is no longer alive or is not a nvim process."""
+        alive = []
+        for inst in self.instances:
+            if inst.pid <= 0:
+                self.log.info("Pruning invalid pid entry root=%s", inst.project_root)
+                continue
+            if self.test_mode:
+                alive.append(inst)
+                continue
+            try:
+                os.kill(inst.pid, 0)
+                comm = subprocess.run(
+                    ["ps", "-p", str(inst.pid), "-o", "comm="],
+                    capture_output=True, text=True, timeout=2,
+                ).stdout.strip()
+                if "nvim" not in comm:
+                    self.log.info("Pruning non-nvim instance pid=%d comm=%s root=%s", inst.pid, comm, inst.project_root)
+                    continue
+                alive.append(inst)
+            except (ProcessLookupError, FileNotFoundError):
+                self.log.info("Pruning dead instance pid=%d root=%s", inst.pid, inst.project_root)
+            except (subprocess.TimeoutExpired, PermissionError):
+                alive.append(inst)
+        self.instances = alive
+
+    def _find_by_root(self, project_root):
+        """Find an alive instance with matching project_root. Returns Instance or None."""
+        for inst in self.instances:
+            if inst.project_root == project_root and not inst.orphan:
+                return inst
+        return None
+
+    def _find_orphan(self):
+        """Find the orphan instance. Returns Instance or None."""
+        for inst in self.instances:
+            if inst.orphan:
+                return inst
+        return None
+
+    def _save_sessions(self):
+        """Persist instances to sessions.json."""
+        os.makedirs(self.state_dir, exist_ok=True)
+        tmp = self.sessions_file + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump([inst.to_dict() for inst in self.instances], f)
+        os.replace(tmp, self.sessions_file)
+
+    def _load_sessions(self):
+        """Load instances from sessions.json. Called on startup."""
+        try:
+            with open(self.sessions_file, "r") as f:
+                data = json.load(f)
+            self.instances = [Instance.from_dict(d) for d in data]
+            self._prune_dead()
+            self.log.info("Loaded %d instances from sessions.json", len(self.instances))
+        except (FileNotFoundError, json.JSONDecodeError):
+            self.instances = []
+            self.log.info("No sessions.json found, starting fresh")
+
+    def handle_register(self, msg):
+        pid = msg["pid"]
+        project_root = os.path.realpath(msg["project_root"])
+        sock_path = msg["socket"]
+        orphan = msg.get("orphan", False)
+
+        if orphan:
+            existing_orphan = self._find_orphan()
+            if existing_orphan:
+                self.log.info("Dup orphan: pid=%d, existing pid=%d", pid, existing_orphan.pid)
+                return {"status": "dup", "socket": existing_orphan.socket}
+            inst = Instance(pid=pid, project_root=project_root, socket=sock_path, orphan=True)
+            self.instances.append(inst)
+            self._save_sessions()
+            self.log.info("Registered orphan: pid=%d socket=%s", pid, sock_path)
+            return {"status": "ok"}
+
+        existing = self._find_by_root(project_root)
+        if existing:
+            if self.test_mode:
+                self.log.info("Dup project (test mode): pid=%d root=%s, existing pid=%d", pid, project_root, existing.pid)
+                return {"status": "dup", "socket": existing.socket}
+            try:
+                os.kill(existing.pid, 0)
+                self.log.info("Dup project: pid=%d root=%s, existing pid=%d", pid, project_root, existing.pid)
+                return {"status": "dup", "socket": existing.socket}
+            except ProcessLookupError:
+                self.instances.remove(existing)
+
+        inst = Instance(pid=pid, project_root=project_root, socket=sock_path, orphan=False)
+        self.instances.append(inst)
+        self._save_sessions()
+        self.log.info("Registered project: pid=%d root=%s socket=%s", pid, project_root, sock_path)
+        return {"status": "ok"}
+
+    def handle_unregister(self, msg):
+        sock_path = msg["socket"]
+        before = len(self.instances)
+        self.instances = [i for i in self.instances if i.socket != sock_path]
+        removed = before - len(self.instances)
+        if removed:
+            self._save_sessions()
+            self.log.info("Unregistered socket=%s (removed %d)", sock_path, removed)
+        return {"status": "ok"}
+
+    def handle_open(self, msg):
+        path = os.path.realpath(msg["path"])
+        line = msg.get("line")
+        col = msg.get("col")
+
+        self._prune_dead()
+
+        is_dir = os.path.isdir(path)
+
+        if is_dir:
+            canonical = os.path.realpath(path)
+            for inst in self.instances:
+                if not inst.orphan and inst.project_root == canonical:
+                    return {"status": "routed", "socket": inst.socket, "line": line, "col": col}
+            return {"status": "no_instance"}
+
+        for inst in self.instances:
+            if inst.orphan:
+                continue
+            if path == inst.project_root or path.startswith(inst.project_root + os.sep):
+                return {"status": "routed", "socket": inst.socket, "line": line, "col": col}
+
+        orphan = self._find_orphan()
+        if orphan:
+            return {"status": "routed", "socket": orphan.socket, "line": line, "col": col}
+
+        return {"status": "no_instance"}
+
+    def handle_list(self, _msg):
+        self._prune_dead()
+        return {"status": "ok", "instances": [inst.to_dict() for inst in self.instances]}
+
+    COMMANDS = {
+        "register": handle_register,
+        "unregister": handle_unregister,
+        "open": handle_open,
+        "list": handle_list,
+        "ping": lambda self, _msg: {"status": "ok"},
+    }
+
+    def process_line(self, line):
+        """Parse a JSON line and dispatch to the appropriate handler."""
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            self.log.warning("Invalid JSON: %s", line)
+            return {"status": "error", "message": "invalid JSON"}
+
+        cmd = msg.get("cmd")
+        if cmd not in self.COMMANDS:
+            self.log.warning("Unknown command: %s", cmd)
+            return {"status": "error", "message": f"unknown command: {cmd}"}
+
+        self.last_activity = time.time()
+        handler = self.COMMANDS[cmd]
+        return handler(self, msg)
+
+    def _process_buffer(self, sock):
+        """Process complete lines from a connection's buffer. Returns responses to send."""
+        responses = []
+        while "\n" in self.connections[sock]:
+            line, self.connections[sock] = self.connections[sock].split("\n", 1)
+            if not line.strip():
+                continue
+            response = self.process_line(line)
+            responses.append(response)
+        return responses
+
+    def run(self):
+        """Main event loop."""
+        self._load_sessions()
+
+        os.makedirs(self.state_dir, exist_ok=True)
+        if os.path.exists(self.socket_path):
+            os.unlink(self.socket_path)
+
+        self.server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server_socket.bind(self.socket_path)
+        self.server_socket.listen(5)
+        self.server_socket.setblocking(False)
+
+        with open(self.pid_file, "w") as f:
+            f.write(str(os.getpid()))
+
+        self.log.info("Daemon started on %s pid=%d", self.socket_path, os.getpid())
+
+        import select
+
+        try:
+            while True:
+                if not self.instances and (time.time() - self.last_activity) > IDLE_TIMEOUT:
+                    self.log.info("Idle timeout, shutting down")
+                    break
+
+                readable, _, _ = select.select(
+                    [self.server_socket] + list(self.connections.keys()),
+                    [], [], 1.0,
+                )
+
+                for sock in readable:
+                    if sock is self.server_socket:
+                        conn, _ = self.server_socket.accept()
+                        conn.setblocking(False)
+                        self.connections[conn] = ""
+                        self.log.debug("New connection fd=%d", conn.fileno())
+                    else:
+                        try:
+                            data = sock.recv(4096)
+                            if not data:
+                                self.connections.pop(sock, None)
+                                sock.close()
+                                self.log.debug("Connection closed fd=%d", sock.fileno())
+                                continue
+                            self.connections[sock] += data.decode("utf-8")
+                            for resp in self._process_buffer(sock):
+                                try:
+                                    sock.sendall((json.dumps(resp) + "\n").encode())
+                                except BrokenPipeError:
+                                    pass
+                        except (ConnectionResetError, BrokenPipeError, OSError):
+                            self.connections.pop(sock, None)
+                            sock.close()
+
+        except KeyboardInterrupt:
+            self.log.info("Interrupted, shutting down")
+        finally:
+            self._save_sessions()
+            self.server_socket.close()
+            if os.path.exists(self.socket_path):
+                os.unlink(self.socket_path)
+            if os.path.exists(self.pid_file):
+                os.unlink(self.pid_file)
+            self.log.info("Daemon stopped")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Neovim instance manager daemon")
+    parser.add_argument("--socket", default=DAEMON_SOCKET, help="Path to daemon socket")
+    parser.add_argument("--log-file", default=None, help="Override log file path")
+    parser.add_argument("--test", action="store_true", help="Test mode (no subprocesses)")
+    parser.add_argument("--foreground", action="store_true", help="Run in foreground (don't daemonize)")
+    parser.add_argument("--list", action="store_true", help="List registered instances and exit")
+    args = parser.parse_args()
+
+    if args.list:
+        daemon = Daemon(socket_path=args.socket, log_file=args.log_file, test_mode=True)
+        daemon._load_sessions()
+        daemon._prune_dead()
+        instances = daemon.instances
+        if not instances:
+            print("No registered instances.")
+        else:
+            for inst in instances:
+                label = "(orphan)" if inst.orphan else inst.project_root
+                print(f"{label} -> {inst.socket} [alive]")
+        sys.exit(0)
+
+    daemon = Daemon(socket_path=args.socket, log_file=args.log_file, test_mode=args.test)
+
+    if not args.foreground and not args.test:
+        pid = os.fork()
+        if pid != 0:
+            sys.exit(0)
+        os.setsid()
+
+    daemon.run()
+
+
+if __name__ == "__main__":
+    main()
