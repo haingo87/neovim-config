@@ -106,11 +106,28 @@ nvim-open <file|directory>
 - **Finder**: Set `nvim-open` as default handler for source file types
 - **Terminal**: `nvim-open src/foo.cs`
 
-### Session Registry
+### Daemon Architecture
 
-Running Neovim instances register themselves in `~/.local/state/nvim/sessions.json`. The `nvim-open` script reads this file to determine which project a file belongs to. Health checks automatically prune dead entries.
+`nvim-open` is a pure file router. It does not detect projects or manage state — it delegates to `nvim-daemon`, a persistent background process.
 
-Inspect with: `nvim-open --list`
+**How it works:**
+1. `nvim-daemon` runs as a background process listening on a Unix domain socket (`~/.local/state/nvim/daemon.sock`)
+2. When Neovim starts, `init.lua` registers the instance with the daemon via `session.lua` + `daemon.lua` (socket-based JSON-lines protocol)
+3. When a file is opened, `nvim-open` asks the daemon which instance should receive it
+4. The daemon routes by path prefix matching against registered project roots, with an orphan fallback for files outside any project
+5. If a second Neovim instance starts in the same project, the daemon returns a `dup` response — the new instance routes its files to the existing one and exits
+
+**Duplicate prevention:** Starting `nvim` in a project directory with a running instance auto-exits after routing files to the existing instance using `nvim --server --remote` and `bring_to_front()`.
+
+**Redirect strategy:** When a `dup` instance exits, `redirect.lua` brings the original window to focus:
+- **macOS:** `osascript` to bring the terminal process to front
+- **Linux X11:** `wmctrl` or `xdotool` to activate the terminal window
+- **tmux:** `tmux select-pane` to switch to the right pane
+- **SSH/Wayland:** Notification only (auto-focus unavailable)
+
+**`nvproj` changes:** Updating `.nvproj` does not require a daemon restart. Use `:ProjectReload` to re-detect the environment.
+
+Inspect registered instances: `nvim-open --list`
 
 ## Keybindings
 
@@ -249,9 +266,15 @@ neovim-config/
 │       │   └── lang.lua        # roslyn, conform (project-gated)
 │       └── util/
 │           ├── project.lua     # .nvproj detection, LSP/DAP setup
-│           ├── session.lua     # Session registry (instance discovery)
+│           ├── session.lua     # Instance registration via daemon socket
+│           ├── daemon.lua      # Low-level daemon socket JSON-lines client
+│           ├── redirect.lua    # Window focus for macOS/Linux/tmux/SSH
 │           └── hash.lua        # SHA-256 utility for socket names
-├── nvim-open                   # CLI script for smart file routing
+├── nvim-daemon                 # Persistent background daemon (Unix socket, JSON-lines protocol)
+├── nvim-open                   # CLI script for smart file routing (talks to daemon)
 ├── link-config.sh              # Symlink setup helper
-└── .nvproj.example            # Template .nvproj file
+├── .nvproj.example            # Template .nvproj file
+└── tests/
+    ├── conftest.py             # Pytest fixtures (daemon startup/shutdown, temp sockets)
+    └── test_daemon.py          # Protocol and routing tests
 ```
