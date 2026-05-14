@@ -178,11 +178,11 @@ def main():
                 if result.returncode == 0:
                     alive = " [alive]"
                 else:
-                    alive = f" [DEAD] rc={result.returncode} stderr={result.stderr.decode().strip()}"
+                    alive = " [DEAD]"
             except subprocess.TimeoutExpired:
-                alive = " [DEAD] (timeout)"
+                alive = " [DEAD]"
             except FileNotFoundError:
-                alive = " [DEAD] (nvim not found)"
+                alive = " [DEAD]"
             print(f"{s['project_root']} -> {s['socket']}{alive}")
         sys.exit(0)
 
