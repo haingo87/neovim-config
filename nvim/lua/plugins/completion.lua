@@ -66,8 +66,8 @@ return {
 				},
 				mapping = cmp.mapping.preset.insert({
 					["<Tab>"] = cmp.mapping(function(fallback)
-						local copilot_suggestion = require("copilot.suggestion")
-						if copilot_suggestion.is_visible() then
+						local ok, copilot_suggestion = pcall(require, "copilot.suggestion")
+						if ok and copilot_suggestion.is_visible() then
 							copilot_suggestion.accept()
 						elseif cmp.visible() then
 							cmp.select_next_item()
