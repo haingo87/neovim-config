@@ -114,8 +114,11 @@ def _nvim_remote(socket, filepath):
     if not os.path.exists(socket):
         return False
     try:
+        # :tab drop opens in a new tab if not visible, or switches to existing tab.
+        # Uses remote-expr to execute directly via RPC — avoids nvim_input/terminal issues.
         result = subprocess.run(
-            ["nvim", "--server", socket, "--remote", filepath],
+            ["nvim", "--server", socket, "--remote-expr",
+             f'execute("tab drop " . fnameescape("{filepath}"))'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL, timeout=5, env=_nvim_env(),
         )
