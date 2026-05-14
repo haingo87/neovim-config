@@ -102,25 +102,32 @@ vim.api.nvim_create_autocmd("UIEnter", {
 				vim.cmd("Neotree show")
 			end)
 		end
-		-- Detect Ghostty window/tab for tab-aware window focus
-		if vim.env.TERM_PROGRAM == "ghostty" then
-			vim.schedule(function()
-				local win_id = vim.fn.system({
-					"osascript", "-e",
-					'tell application "Ghostty" to get id of front window',
-				}):gsub("%s+", "")
-				if win_id and win_id ~= "" then
-					vim.g.ghostty_window_id = win_id
-				end
-				local tab_idx = vim.fn.system({
-					"osascript", "-e",
-					'tell application "Ghostty" to get index of selected tab of window 1',
-				}):gsub("%s+", "")
-				local n = tonumber(tab_idx)
-				if n then
-					vim.g.ghostty_tab_index = n
-				end
-			end)
+		-- Detect macOS terminal window/tab for tab-aware window focus
+		if vim.env.TERM_PROGRAM then
+			local term = vim.env.TERM_PROGRAM
+			if term == "ghostty" or term == "Apple_Terminal" then
+				vim.schedule(function()
+					local app = (term == "Apple_Terminal") and "Terminal" or "Ghostty"
+					local win_id = vim.fn.system({
+						"osascript", "-e",
+						'tell application "' .. app .. '" to get id of front window',
+					}):gsub("%s+", "")
+					if win_id and win_id ~= "" then
+						vim.g.macos_window_id = win_id
+						vim.g.macos_terminal_app = app
+					end
+					if term == "ghostty" then
+						local tab_idx = vim.fn.system({
+							"osascript", "-e",
+							'tell application "Ghostty" to get index of selected tab of window 1',
+						}):gsub("%s+", "")
+						local n = tonumber(tab_idx)
+						if n then
+							vim.g.macos_tab_index = n
+						end
+					end
+				end)
+			end
 		end
 	end,
 })
