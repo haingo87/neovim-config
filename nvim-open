@@ -193,7 +193,12 @@ def main():
             print("No registered instances.")
         else:
             for inst in instances:
-                alive = " [alive]" if inst.get("orphan") or True else " [DEAD]"
+                alive = ""
+                try:
+                    os.kill(inst["pid"], 0)
+                    alive = " [alive]"
+                except (ProcessLookupError, PermissionError):
+                    alive = " [DEAD]"
                 label = "(orphan)" if inst.get("orphan") else inst["project_root"]
                 print(f"{label} -> {inst['socket']}{alive}")
         sys.exit(0)
