@@ -230,7 +230,9 @@ def main():
 
     if resp["status"] == "routed":
         target_socket = resp["socket"]
-        _nvim_remote(target_socket, filepath, line, col, args.verbose)
+        if not _nvim_remote(target_socket, filepath, line, col, args.verbose):
+            if args.verbose:
+                print(f"Warning: could not send {filepath} to {target_socket}, file may not exist", file=sys.stderr)
     elif resp["status"] == "no_instance":
         if is_dir or (os.path.exists(filepath) and os.path.isdir(filepath)):
             _launch_project(filepath, args.verbose)
