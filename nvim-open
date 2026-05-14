@@ -197,8 +197,10 @@ def main():
                 try:
                     os.kill(inst["pid"], 0)
                     alive = " [alive]"
-                except (ProcessLookupError, PermissionError):
+                except ProcessLookupError:
                     alive = " [DEAD]"
+                except PermissionError:
+                    alive = " [alive]"
                 label = "(orphan)" if inst.get("orphan") else inst["project_root"]
                 print(f"{label} -> {inst['socket']}{alive}")
         sys.exit(0)
