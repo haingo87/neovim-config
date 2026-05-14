@@ -10,7 +10,7 @@ local function send_and_recv(msg, retries)
 	end
 	daemon.send(sock, msg)
 	local resp = daemon.recv(sock)
-	pcall(vim.fn.chanclose, sock, "rw")
+	daemon.close(sock)
 	return resp
 end
 

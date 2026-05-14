@@ -100,9 +100,24 @@ def _nvim_remote(socket_path, filepath, line=None, col=None, verbose=False):
     if not os.path.exists(socket_path):
         return False
     env = _nvim_env()
+    exists = os.path.exists(filepath)
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["nvim", "--server", socket_path, "--remote", filepath],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL, timeout=5, env=env,
+        )
+        if result.returncode != 0:
+            return False
+        if not exists:
+            subprocess.run(
+                ["nvim", "--server", socket_path, "--remote-expr",
+                 f'vim.notify("File not found: {filepath}", vim.log.levels.WARN)'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL, timeout=5, env=env,
+            )
+        subprocess.run(
+            ["nvim", "--server", socket_path, "--remote-expr", "checktime()"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL, timeout=5, env=env,
         )
@@ -114,6 +129,12 @@ def _nvim_remote(socket_path, filepath, line=None, col=None, verbose=False):
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL, timeout=5, env=env,
             )
+        subprocess.run(
+            ["nvim", "--server", socket_path, "--remote-expr",
+             "v:lua.require('util.redirect').bring_to_front()"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL, timeout=5, env=env,
+        )
         if verbose:
             print(f"Sent {filepath} to {socket_path}", file=sys.stderr)
         return True
@@ -123,6 +144,8 @@ def _nvim_remote(socket_path, filepath, line=None, col=None, verbose=False):
 
 def _launch_orphan(filepath, verbose=False):
     os.makedirs(SOCKETS_DIR, exist_ok=True)
+    if os.path.exists(ORPHAN_SOCKET):
+        os.remove(ORPHAN_SOCKET)
     env = _nvim_env()
     env["NVIM_ORPHAN_GROUP"] = "1"
     cmd = ["nvim", "--listen", ORPHAN_SOCKET, filepath]

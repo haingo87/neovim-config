@@ -21,11 +21,36 @@ function M.bring_to_front()
 end
 
 function M._macos_focus()
+	local tab_idx = vim.g.ghostty_tab_index
+	local win_id = vim.g.ghostty_window_id
+	if tab_idx and win_id then
+		vim.fn.jobstart({
+			"osascript", "-e",
+			"tell application \"Ghostty\"",
+			"-e", "activate",
+			"-e", "select tab (tab " .. tab_idx .. " of window id \"" .. win_id .. "\")",
+			"-e", "end tell",
+		}, { detach = true })
+		return
+	end
+
+	local terminal = vim.env.TERM_PROGRAM
+	local process_name = "Terminal"
+	if terminal == "iTerm.app" then
+		process_name = "iTerm2"
+	elseif terminal == "Apple_Terminal" then
+		process_name = "Terminal"
+	elseif terminal == "WezTerm" then
+		process_name = "WezTerm"
+	elseif terminal == "kitty" then
+		process_name = "kitty"
+	end
+
 	vim.api.nvim_echo({ { "\027[1t", "" } }, false, {})
 	vim.fn.jobstart({
 		"osascript",
 		"-e",
-		'tell application "System Events" to set frontmost of process "' .. M._terminal_process() .. '" to true',
+		'tell application "System Events" to set frontmost of process "' .. process_name .. '" to true',
 	}, { detach = true })
 end
 
@@ -37,32 +62,29 @@ function M._linux_focus()
 
 	vim.api.nvim_echo({ { "\027[1t", "" } }, false, {})
 
-	if vim.fn.executable("wmctrl") == 1 then
-		vim.fn.jobstart({ "wmctrl", "-a", M._terminal_window() }, { detach = true })
-	elseif vim.fn.executable("xdotool") == 1 then
+	if vim.fn.executable("xdotool") == 1 then
 		vim.fn.jobstart({ "xdotool", "search", "--pid", vim.fn.getpid(), "windowactivate" }, { detach = true })
+	elseif vim.fn.executable("wmctrl") == 1 then
+		vim.fn.jobstart({ "wmctrl", "-a", M._terminal_process() }, { detach = true })
 	else
 		vim.notify("[session] Install wmctrl or xdotool for auto-focus", vim.log.levels.INFO)
 	end
 end
 
 function M._tmux_focus()
-	local pane = vim.fn.truncate(vim.env.TMUX_PANE or "", 0, 0)
+	local pane = vim.env.TMUX_PANE
 	if pane and pane ~= "" then
 		vim.fn.system({ "tmux", "select-pane", "-t", pane })
 	end
 end
 
 function M._terminal_process()
-	local cmd = vim.fn.system({ "ps", "-p", tostring(vim.fn.getppid()), "-o", "comm=" }):gsub("%s+", "")
+	local ppid = vim.uv.os_getppid()
+	local cmd = vim.fn.system({ "ps", "-p", tostring(ppid), "-o", "comm=" }):gsub("%s+", "")
 	if cmd == "" then
 		cmd = "Terminal"
 	end
 	return cmd
-end
-
-function M._terminal_window()
-	return vim.o.titlestring or "nvim"
 end
 
 return M

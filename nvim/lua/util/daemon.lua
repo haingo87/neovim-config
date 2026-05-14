@@ -5,9 +5,24 @@ local DAEMON_SOCKET = vim.fn.stdpath("state") .. "/daemon.sock"
 function M.connect(retries)
 	retries = retries or 3
 	for i = 1, retries do
-		local sock = vim.fn.sockconnect("unix", DAEMON_SOCKET, { rpc = false })
-		if sock > 0 then
-			return sock
+		local pipe = vim.uv.new_pipe(false)
+		if pipe then
+			local connected = false
+			local conn_err = nil
+			pipe:connect(DAEMON_SOCKET, function(err)
+				connected = true
+				conn_err = err
+			end)
+			local start = vim.uv.now()
+			while not connected and (vim.uv.now() - start < 3000) do
+				vim.wait(50)
+			end
+			if connected and not conn_err then
+				return pipe
+			end
+			if not pipe:is_closing() then
+				pipe:close()
+			end
 		end
 		if i < retries then
 			vim.wait(1000)
@@ -18,29 +33,46 @@ end
 
 function M.send(sock, msg)
 	local data = vim.json.encode(msg) .. "\n"
-	return vim.fn.chansend(sock, data)
+	sock:write(data)
 end
 
 function M.recv(sock, timeout_ms)
 	timeout_ms = timeout_ms or 5000
 	local buf = ""
-	local start = vim.uv.now()
-	while vim.uv.now() - start < timeout_ms do
-		local chunk = vim.fn.ch_readraw(sock, { timeout = 100 })
-		if chunk and #chunk > 0 then
-			buf = buf .. chunk
+	local result = nil
+
+	sock:read_start(function(err, data)
+		if err then
+			result = false
+			return
+		end
+		if data then
+			buf = buf .. data
 			local nl = buf:find("\n")
 			if nl then
 				local line = buf:sub(1, nl - 1)
+				buf = buf:sub(nl + 1)
 				local ok, parsed = pcall(vim.json.decode, line)
 				if ok then
-					return parsed
+					result = parsed
 				end
 			end
 		end
+	end)
+
+	local start = vim.uv.now()
+	while not result and (vim.uv.now() - start < timeout_ms) do
 		vim.wait(50)
 	end
-	return nil
+
+	sock:read_stop()
+	return result
+end
+
+function M.close(sock)
+	if sock and not sock:is_closing() then
+		sock:close()
+	end
 end
 
 return M
