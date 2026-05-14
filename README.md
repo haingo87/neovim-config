@@ -4,7 +4,7 @@ Personal DIY Neovim configuration optimized for C# (Unity) and C++ (CMake) devel
 
 ## Features
 
-- **Per-project `.project` files** — language-specific plugins (roslyn/clangd), formatters, and debug adapters gated by a single Lua config file
+- **Per-project `.nvproj` files** — language-specific plugins (roslyn/clangd), formatters, and debug adapters gated by a single Lua config file
 - **Smart file open (`nvim-open`)** — routes files opened from Finder, Unity, or terminal to the correct running Neovim instance based on project membership
 - **GitHub Copilot** — AI auto-complete via Tab (no chat panel)
 - **DAP debugging** — full nvim-dap + dap-ui stack with VSCode F5/F9/F10/F11 keymaps
@@ -54,9 +54,9 @@ ln -sf /path/to/neovim-config/nvim-open ~/.local/bin/nvim-open
 
 On first launch, lazy.nvim will install all plugins. Open Mason (`:Mason`) to install LSP servers and DAP adapters, or run `:MasonInstallAll`.
 
-## Project Configuration (`.project` file)
+## Project Configuration (`.nvproj` file)
 
-Create a `.project` file in your project root. It's a Lua module returning a table:
+Create a `.nvproj` file in your project root. It's a Lua module returning a table:
 
 ```lua
 -- C# / Unity project
@@ -85,7 +85,7 @@ return {
 | `exclude.files` | `string[]` | File globs to hide in neo-tree and telescope |
 | `exclude.dirs` | `string[]` | Directory names to hide in neo-tree and telescope |
 
-Without a `.project` file, the editor still works — neo-tree auto-opens, terminal title shows the folder name, basic LSP servers (lua_ls, jsonls, yamlls, marksman) are available. Project-specific plugins (roslyn, conform, nvim-dap) remain inactive.
+Without a `.nvproj` file, the editor still works — neo-tree auto-opens, terminal title shows the folder name, basic LSP servers (lua_ls, jsonls, yamlls, marksman) are available. Project-specific plugins (roslyn, conform, nvim-dap) remain inactive.
 
 ## Smart File Open (`nvim-open`)
 
@@ -223,7 +223,7 @@ Inspect with: `nvim-open --list`
 
 | Command | Description |
 |---------|-------------|
-| `:ProjectReload` | Re-detect `.project`, reinstall LSP/DAP, reload project plugins |
+| `:ProjectReload` | Re-detect `.nvproj`, reinstall LSP/DAP, reload project plugins |
 | `nvim-open --list` | Show registered project instances with alive/dead status |
 
 ## File Structure
@@ -248,10 +248,10 @@ neovim-config/
 │       │   ├── treesitter.lua  # Treesitter, autotag, Comment
 │       │   └── lang.lua        # roslyn, conform (project-gated)
 │       └── util/
-│           ├── project.lua     # .project detection, LSP/DAP setup
+│           ├── project.lua     # .nvproj detection, LSP/DAP setup
 │           ├── session.lua     # Session registry (instance discovery)
 │           └── hash.lua        # SHA-256 utility for socket names
 ├── nvim-open                   # CLI script for smart file routing
 ├── link-config.sh              # Symlink setup helper
-└── .project.example            # Template .project file
+└── .nvproj.example            # Template .nvproj file
 ```

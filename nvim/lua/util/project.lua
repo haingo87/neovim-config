@@ -8,7 +8,7 @@ function M.detect(cwd)
 		return cached
 	end
 
-	local found = vim.fs.find(".project", { upward = true, path = cwd })
+	local found = vim.fs.find(".nvproj", { upward = true, path = cwd })
 	local result = nil
 
 	if #found > 0 then
