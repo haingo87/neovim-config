@@ -26,7 +26,6 @@ for _, addr in ipairs(vim.fn.serverlist()) do
 	if addr == socket_name then
 		already_listening = true
 		vim.g.nvim_socket_name = socket_name
-		vim.notify("[session] Already listening: " .. socket_name, vim.log.levels.INFO)
 		break
 	end
 end
@@ -35,21 +34,12 @@ if not already_listening then
 	local server_result = vim.fn.serverstart(socket_name)
 	if server_result ~= 0 then
 		vim.g.nvim_socket_name = socket_name
-		vim.notify("[session] Server started: " .. socket_name, vim.log.levels.INFO)
 	else
 		vim.notify("[session] Could not start server on " .. socket_name, vim.log.levels.WARN)
 	end
 end
 
 local should_register = vim.g.nvim_socket_name ~= nil and not vim.g.neovim_orphan_group
-
-vim.notify(
-	string.format("[session] orphan=%s socket=%s register=%s",
-		tostring(vim.g.neovim_orphan_group),
-		tostring(vim.g.nvim_socket_name),
-		tostring(should_register)),
-	vim.log.levels.INFO
-)
 
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -77,7 +67,6 @@ vim.api.nvim_create_autocmd("UIEnter", {
 	callback = function()
 		if should_register then
 			require("util.session").register(project_root, vim.g.nvim_socket_name)
-			vim.notify("[session] Registered: " .. project_root, vim.log.levels.INFO)
 		end
 		if vim.g.project and not vim.g.neovim_orphan_group then
 			vim.schedule(function()
@@ -92,7 +81,6 @@ vim.api.nvim_create_autocmd("VimLeave", {
 	callback = function()
 		if should_register then
 			require("util.session").unregister(project_root, vim.g.nvim_socket_name)
-			vim.notify("[session] Unregistered: " .. project_root, vim.log.levels.INFO)
 		end
 		pcall(os.remove, socket_name)
 	end,
