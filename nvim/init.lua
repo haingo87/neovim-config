@@ -8,6 +8,12 @@ require("util.project").detect(vim.g.initial_cwd)
 
 local hash = require("util.hash")
 local project_root = vim.fn.fnamemodify(vim.fn.resolve(vim.g.initial_cwd), ":p"):gsub("/$", "")
+-- project_dirname: use .project parent dir if .project exists, else cwd basename.
+-- Check vim.g.project (nil when no .project) rather than project_dirname
+-- (which can be vim.NIL, a truthy userdata that breaks == nil and not checks).
+if not vim.g.neovim_orphan_group and not vim.g.project then
+	vim.g.project_dirname = vim.fn.fnamemodify(project_root, ":t")
+end
 local socket_dir = vim.fn.stdpath("state") .. "/sockets"
 vim.fn.mkdir(socket_dir, "p")
 local socket_name
@@ -68,7 +74,7 @@ vim.api.nvim_create_autocmd("UIEnter", {
 		if should_register then
 			require("util.session").register(project_root, vim.g.nvim_socket_name)
 		end
-		if vim.g.project and not vim.g.neovim_orphan_group then
+		if not vim.g.neovim_orphan_group then
 			vim.schedule(function()
 				vim.cmd("Neotree show")
 			end)

@@ -42,6 +42,9 @@ autocmd({ "BufEnter", "DirChanged" }, {
 		end
 		last_cwd = cwd
 		require("util.project").detect(cwd)
+		if not vim.g.project and not vim.g.neovim_orphan_group then
+			vim.g.project_dirname = vim.fn.fnamemodify(vim.fn.resolve(cwd), ":t")
+		end
 	end,
 })
 
