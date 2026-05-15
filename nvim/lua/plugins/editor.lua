@@ -7,7 +7,7 @@ return {
 	{
 		"folke/which-key.nvim",
 		event = "VeryLazy",
-		enabled = not vim.g.neovim_orphan_group,
+		enabled = not vim.g.neovim_light_mode,
 		config = function()
 			require("which-key").setup({
 				preset = "modern",
@@ -19,7 +19,7 @@ return {
 		"nvim-neo-tree/neo-tree.nvim",
 		branch = "v3.x",
 		cmd = "Neotree",
-		enabled = not vim.g.neovim_orphan_group,
+		enabled = not vim.g.neovim_light_mode,
 		keys = {
 			{ "<C-n>", "<cmd>Neotree toggle<CR>", desc = "Toggle Neo-tree" },
 		},
@@ -75,7 +75,7 @@ return {
 		"nvim-telescope/telescope.nvim",
 		branch = "0.1.x",
 		cmd = "Telescope",
-		enabled = not vim.g.neovim_orphan_group,
+		enabled = not vim.g.neovim_light_mode,
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			{

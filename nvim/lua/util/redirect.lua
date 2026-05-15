@@ -101,4 +101,13 @@ function M._terminal_process()
 	return cmd
 end
 
+function M.open_file(filepath, line, col)
+	vim.cmd("edit " .. vim.fn.fnameescape(filepath))
+	if line then
+		vim.cmd(string.format("cursor(%d,%d)", line, col or 1))
+	end
+	vim.cmd("checktime")
+	M.bring_to_front()
+end
+
 return M

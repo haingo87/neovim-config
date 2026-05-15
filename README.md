@@ -5,19 +5,18 @@ Personal DIY Neovim configuration optimized for C# (Unity) and C++ (CMake) devel
 ## Features
 
 - **Per-project `.nvproj` files** — language-specific plugins (roslyn/clangd), formatters, and debug adapters gated by a single Lua config file
-- **Smart file open (`nvim-open`)** — routes files opened from Finder, Unity, or terminal to the correct running Neovim instance based on project membership
+- **Smart instance modes** — `nvim <dir>` starts a project instance with full features; `nvim <file>` starts a lightweight edit session
+- **Duplicate detection** — opening `nvim ./` in a project that's already running redirects to the existing instance
 - **GitHub Copilot** — AI auto-complete via Tab (no chat panel)
 - **DAP debugging** — full nvim-dap + dap-ui stack with VSCode F5/F9/F10/F11 keymaps
 - **LSP & formatting** — roslyn (C#), clangd (C++), stylua (Lua), csharpier/clang-format
 - **Catppuccin Mocha** — consistent theme across Neovim and Ghostty terminal
 - **VSCode-compatible keybindings** — Ctrl+W closes buffer, Ctrl+Tab buffer switching, F12 for LSP actions
-- **Orphan instances** — files outside any project open in a lightweight instance with project plugins disabled
 
 ## Requirements
 
 - **Neovim** >= 0.10 (tested on 0.12.2)
 - **Git** (for lazy.nvim bootstrapping)
-- **Python 3** (for `nvim-open` script)
 - **fd** (`brew install fd`) — for Telescope file search
 - **ripgrep** (`brew install ripgrep`) — for Telescope live grep
 - **make** (for telescope-fzf-native)
@@ -46,13 +45,36 @@ The `link-config.sh` script creates:
 - `~/.config/nvim` → `/path/to/neovim-config/nvim`
 - `~/.config/ghostty` → `/path/to/neovim-config/ghostty`
 
-Add `nvim-open` to your PATH:
+On first launch, lazy.nvim will install all plugins. Open Mason (`:Mason`) to install LSP servers and DAP adapters, or run `:MasonInstallAll`.
+
+## Instance Modes
+
+| Invocation | Mode | Features |
+|------------|------|----------|
+| `nvim ./` or `nvim <dir>` | Project | Full: neo-tree, telescope, which-key, .nvproj, socket for external tools |
+| `nvim <file>` | Light | Minimal: no neo-tree, no telescope, no which-key |
+| `nvim` (no args) | Light | Same as above |
+
+### Duplicate Detection
+
+When you run `nvim ./` in a directory where a project instance is already running, the new instance detects the existing one, sends any file arguments to it, brings it to front, and exits. No daemon needed — detection uses a direct socket probe.
+
+### External Tool Integration
+
+External tools (Unity, Godot, etc.) can open files in a running project instance by connecting to its deterministic socket:
 
 ```bash
-ln -sf /path/to/neovim-config/nvim-open ~/.local/bin/nvim-open
+# Compute the socket path from the project root directory:
+# ~/.local/state/nvim/sockets/nv-<sha256_short(project_root)>.sock
+
+# Open a file (brings window to front automatically):
+nvim --server <socket> --remote-expr "require('util.redirect').open_file('/path/to/file.cs', 42)"
+
+# Just focus the window:
+nvim --server <socket> --remote-expr "require('util.redirect').bring_to_front()"
 ```
 
-On first launch, lazy.nvim will install all plugins. Open Mason (`:Mason`) to install LSP servers and DAP adapters, or run `:MasonInstallAll`.
+The socket name is the first 12 characters of the SHA-256 hash of the project root path.
 
 ## Project Configuration (`.nvproj` file)
 
@@ -65,8 +87,8 @@ return {
         type = "csharp",
     },
     features = {
-        debug = true,           -- nvim-dap + dap-ui + adapters
-        format_on_save = true,  -- conform.nvim auto-format
+        debug = true,
+        format_on_save = true,
     },
 }
 
@@ -84,50 +106,6 @@ return {
 | `features.format_on_save` | `true` / `false` | Auto-format on write via conform.nvim |
 | `exclude.files` | `string[]` | File globs to hide in neo-tree and telescope |
 | `exclude.dirs` | `string[]` | Directory names to hide in neo-tree and telescope |
-
-Without a `.nvproj` file, the editor still works — neo-tree auto-opens, terminal title shows the folder name, basic LSP servers (lua_ls, jsonls, yamlls, marksman) are available. Project-specific plugins (roslyn, conform, nvim-dap) remain inactive.
-
-## Smart File Open (`nvim-open`)
-
-```
-nvim-open <file|directory>
-```
-
-| Argument | Behavior |
-|----------|----------|
-| **File** inside a running project | Routes to that project's Neovim instance (opens in new tab) |
-| **File** outside any project | Routes to the shared orphan Neovim instance |
-| **Directory** with a running instance | Routes to the existing project instance |
-| **Directory** not yet open | Launches a new project instance |
-
-### OS Integration
-
-- **Unity**: Preferences → External Tools → External Script Editor → `nvim-open`
-- **Finder**: Set `nvim-open` as default handler for source file types
-- **Terminal**: `nvim-open src/foo.cs`
-
-### Daemon Architecture
-
-`nvim-open` is a pure file router. It does not detect projects or manage state — it delegates to `nvim-daemon`, a persistent background process.
-
-**How it works:**
-1. `nvim-daemon` runs as a background process listening on a Unix domain socket (`~/.local/state/nvim/daemon.sock`)
-2. When Neovim starts, `init.lua` registers the instance with the daemon via `session.lua` + `daemon.lua` (socket-based JSON-lines protocol)
-3. When a file is opened, `nvim-open` asks the daemon which instance should receive it
-4. The daemon routes by path prefix matching against registered project roots, with an orphan fallback for files outside any project
-5. If a second Neovim instance starts in the same project, the daemon returns a `dup` response — the new instance routes its files to the existing one and exits
-
-**Duplicate prevention:** Starting `nvim` in a project directory with a running instance auto-exits after routing files to the existing instance using `nvim --server --remote` and `bring_to_front()`.
-
-**Redirect strategy:** When a `dup` instance exits, `redirect.lua` brings the original window to focus:
-- **macOS:** `osascript` to bring the terminal process to front
-- **Linux X11:** `wmctrl` or `xdotool` to activate the terminal window
-- **tmux:** `tmux select-pane` to switch to the right pane
-- **SSH/Wayland:** Notification only (auto-focus unavailable)
-
-**`nvproj` changes:** Updating `.nvproj` does not require a daemon restart. Use `:ProjectReload` to re-detect the environment.
-
-Inspect registered instances: `nvim-open --list`
 
 ## Keybindings
 
@@ -208,11 +186,11 @@ Inspect registered instances: `nvim-open --list`
 - **conform.nvim** — Formatting via csharpier, clang-format, stylua
 
 ### Editor
-- **neo-tree.nvim** — File explorer (v3)
-- **telescope.nvim** — Fuzzy finder with fzf-native
+- **neo-tree.nvim** — File explorer (v3, project mode only)
+- **telescope.nvim** — Fuzzy finder with fzf-native (project mode only)
 - **bufferline.nvim** — Buffer tabs with close buttons
 - **toggleterm.nvim** — Integrated terminal
-- **which-key.nvim** — Keybinding hints popup
+- **which-key.nvim** — Keybinding hints popup (project mode only)
 - **bufdelete.nvim** — Safe buffer deletion
 - **Comment.nvim** — Comment toggling
 - **vim-sleuth** — Auto-detect indentation
@@ -241,7 +219,6 @@ Inspect registered instances: `nvim-open --list`
 | Command | Description |
 |---------|-------------|
 | `:ProjectReload` | Re-detect `.nvproj`, reinstall LSP/DAP, reload project plugins |
-| `nvim-open --list` | Show registered project instances with alive/dead status |
 
 ## File Structure
 
@@ -249,7 +226,7 @@ Inspect registered instances: `nvim-open --list`
 neovim-config/
 ├── ghostty/config              # Ghostty terminal config
 ├── nvim/
-│   ├── init.lua                # Entry point, server start, session lifecycle
+│   ├── init.lua                # Entry point, mode detection, socket lifecycle
 │   ├── lazy-lock.json          # Plugin version lockfile
 │   └── lua/
 │       ├── config/
@@ -266,15 +243,8 @@ neovim-config/
 │       │   └── lang.lua        # roslyn, conform (project-gated)
 │       └── util/
 │           ├── project.lua     # .nvproj detection, LSP/DAP setup
-│           ├── session.lua     # Instance registration via daemon socket
-│           ├── daemon.lua      # Low-level daemon socket JSON-lines client
-│           ├── redirect.lua    # Window focus for macOS/Linux/tmux/SSH
+│           ├── redirect.lua    # Window focus + open_file for external tools
 │           └── hash.lua        # SHA-256 utility for socket names
-├── nvim-daemon                 # Persistent background daemon (Unix socket, JSON-lines protocol)
-├── nvim-open                   # CLI script for smart file routing (talks to daemon)
 ├── link-config.sh              # Symlink setup helper
-├── .nvproj.example            # Template .nvproj file
-└── tests/
-    ├── conftest.py             # Pytest fixtures (daemon startup/shutdown, temp sockets)
-    └── test_daemon.py          # Protocol and routing tests
+└── .nvproj.example             # Template .nvproj file
 ```
