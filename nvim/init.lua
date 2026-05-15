@@ -1,17 +1,24 @@
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
-local args = vim.fn.argv()
-vim.g.neovim_light_mode = true
+local has_dir_arg = false
 local project_dir = nil
 
-for _, arg in ipairs(args) do
-	local resolved = vim.fn.fnamemodify(arg, ":p")
-	if vim.fn.isdirectory(resolved) == 1 then
-		vim.g.neovim_light_mode = false
-		project_dir = resolved:gsub("/$", "")
+for i = 2, #vim.v.argv do
+	local arg = vim.v.argv[i]
+	if type(arg) == "string" and vim.fn.isdirectory(arg) == 1 then
+		has_dir_arg = true
+		project_dir = vim.fn.fnamemodify(arg, ":p"):gsub("/$", "")
 		break
 	end
+end
+
+vim.g.neovim_light_mode = not has_dir_arg
+
+if project_dir then
+	vim.fn.chdir(project_dir)
+else
+	project_dir = vim.fn.getcwd()
 end
 
 if not vim.g.neovim_light_mode and project_dir then
@@ -62,7 +69,11 @@ if not vim.g.neovim_light_mode and project_dir then
 
 	if is_dup then
 		local redirect = require("util.redirect")
-		for _, arg in ipairs(args) do
+		for i = 2, #vim.v.argv do
+			local arg = vim.v.argv[i]
+			if type(arg) ~= "string" or arg == "" or arg:sub(1, 1) == "-" then
+				goto continue
+			end
 			local filepath = vim.fn.fnamemodify(arg, ":p")
 			if vim.fn.isdirectory(filepath) ~= 1 then
 				vim.fn.system({
@@ -74,6 +85,7 @@ if not vim.g.neovim_light_mode and project_dir then
 					),
 				})
 			end
+			::continue::
 		end
 		redirect.bring_to_front()
 		vim.cmd("qa!")
