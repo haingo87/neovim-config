@@ -174,6 +174,26 @@ return {
 					end)
 				end,
 			})
+
+			-- Redirect :terminal to a non-tree window to avoid extra window creation
+			-- Community workaround: Neovim doesn't protect sidebar windows from splits
+			vim.api.nvim_create_user_command("Terminal", function(opts)
+				for _, win in ipairs(vim.api.nvim_list_wins()) do
+					local buf = vim.api.nvim_win_get_buf(win)
+					if vim.bo[buf].filetype ~= "NvimTree" then
+						vim.api.nvim_set_current_win(win)
+						break
+					end
+				end
+				vim.cmd("terminal " .. opts.args)
+			end, { nargs = "*", desc = "Open terminal in a non-tree window" })
+
+			-- Transparent abbreviation so :terminal runs our custom command
+			vim.cmd([[
+				cnoreabbrev <expr> terminal
+					\ getcmdtype() == ':' && getcmdline() =~# '^terminal\s*$'
+					\ ? 'Terminal' : 'terminal'
+			]])
 		end,
 	},
 

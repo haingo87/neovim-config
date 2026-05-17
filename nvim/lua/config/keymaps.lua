@@ -21,6 +21,8 @@ map("i", "<C-S-k>", "<C-o>dd", { desc = "Delete line" })
 
 --- Window / Split Management ---
 
+map("n", "<leader>t", "<cmd>Terminal<CR>", { desc = "Open terminal" })
+
 --- Telescope from leader ---
 map("n", "<leader>ff", "<cmd>Telescope find_files<CR>", { desc = "Find files" })
 map("n", "<leader>fg", "<cmd>Telescope live_grep<CR>", { desc = "Live grep" })
