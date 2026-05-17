@@ -234,7 +234,10 @@ return {
 			local find_command = { "rg", "--files", "--hidden", "--glob", "!**/.git/*" }
 			local grep_args = { "--hidden" }
 
-			local file_patterns = { "*.meta", "*.asset" }
+			local file_patterns = {}
+			if not (vim.g.project and vim.g.project.env and vim.g.project.env.type == "csharp") then
+				file_patterns = { "*.meta", "*.asset" }
+			end
 			local dir_names = {}
 
 			if vim.g.project and vim.g.project.exclude then
