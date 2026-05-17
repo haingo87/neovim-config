@@ -59,6 +59,20 @@ autocmd({ "BufRead", "BufNewFile" }, {
 	end,
 })
 
+--- Delete terminal buffer when its process exits (prevents buffer accumulation) ---
+-- Community-known issue: nvim-tree/nvim-tree.lua#2, #2014, #1368
+-- Terminal buffers accumulate as hidden listed buffers after process exit + :q.
+-- Deleting on TermClose prevents them from showing up in bufferline permanently.
+autocmd("TermClose", {
+	group = general,
+	callback = function()
+		local bufnr = tonumber(vim.fn.expand("<abuf>"))
+		if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+			vim.api.nvim_buf_delete(bufnr, { force = true })
+		end
+	end,
+})
+
 --- Set terminal title ---
 local title_group = augroup("SetTitle", { clear = true })
 

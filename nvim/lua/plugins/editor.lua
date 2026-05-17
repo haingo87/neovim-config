@@ -124,18 +124,51 @@ return {
 			})
 
 			vim.api.nvim_create_autocmd("BufEnter", {
-				desc = "Create new buffer if tree is the last window",
+				desc = "Open scratch buffer when tree is the last window",
 				callback = function()
 					if vim.bo.filetype ~= "NvimTree" then return end
 
 					vim.schedule(function()
-						if #vim.api.nvim_list_wins() == 1 then
-							vim.cmd("vsplit | enew")
-							for _, win in ipairs(vim.api.nvim_list_wins()) do
-								if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "NvimTree" then
-									vim.api.nvim_win_set_width(win, tree_actual_width)
-									break
-								end
+						if #vim.api.nvim_list_wins() ~= 1 then return end
+
+						-- Find existing hidden scratch buffer to reuse instead of creating new
+						local reuse = nil
+						for _, b in ipairs(vim.api.nvim_list_bufs()) do
+							if vim.api.nvim_buf_is_valid(b)
+								and vim.api.nvim_buf_get_name(b) == ""
+								and vim.bo[b].buftype == ""
+								and vim.bo[b].filetype == ""
+								and vim.fn.bufwinnr(b) == -1
+								and not vim.bo[b].modified then
+								reuse = b
+								break
+							end
+						end
+
+						-- Delete orphaned hidden scratch buffers (never keep more than one)
+						for _, b in ipairs(vim.api.nvim_list_bufs()) do
+							if vim.api.nvim_buf_is_valid(b)
+								and vim.api.nvim_buf_get_name(b) == ""
+								and vim.bo[b].buftype == ""
+								and vim.bo[b].filetype == ""
+								and vim.fn.bufwinnr(b) == -1
+								and not vim.bo[b].modified
+								and b ~= reuse then
+								pcall(vim.api.nvim_buf_delete, b, { force = true })
+							end
+						end
+
+						vim.cmd("vsplit")
+						if reuse then
+							vim.api.nvim_win_set_buf(vim.api.nvim_get_current_win(), reuse)
+						else
+							vim.cmd("enew")
+						end
+
+						for _, win in ipairs(vim.api.nvim_list_wins()) do
+							if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "NvimTree" then
+								vim.api.nvim_win_set_width(win, tree_actual_width)
+								break
 							end
 						end
 					end)
