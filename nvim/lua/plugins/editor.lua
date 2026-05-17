@@ -26,16 +26,18 @@ return {
 			"nvim-tree/nvim-web-devicons",
 		},
 		config = function()
-			local exclude_dirs = {}
-			if vim.g.project and vim.g.project.exclude and vim.g.project.exclude.dirs then
-				vim.list_extend(exclude_dirs, vim.g.project.exclude.dirs)
-			else
-				vim.list_extend(exclude_dirs, { ".DS_Store", "thumbs.db", "node_modules", "__pycache__" })
+			local custom_filters = { ".DS_Store", "^thumbs\\.db$", "node_modules", "__pycache__" }
+			if vim.g.project and vim.g.project.exclude then
+				if vim.g.project.exclude.dirs then
+					vim.list_extend(custom_filters, vim.g.project.exclude.dirs)
+				end
+				if vim.g.project.exclude.files then
+					vim.list_extend(custom_filters, vim.g.project.exclude.files)
+				end
 			end
-			table.insert(exclude_dirs, ".git")
+			table.insert(custom_filters, "^\\.git$")
 
 			local tree_width = 30
-			local tree_actual_width = tree_width
 
 			require("nvim-tree").setup({
 				on_attach = function(bufnr)
@@ -59,8 +61,8 @@ return {
 					width = tree_width,
 				},
 				filters = {
-					dotfiles = true,
-					custom = exclude_dirs,
+					dotfiles = false,
+					custom = custom_filters,
 				},
 				git = {
 					ignore = false,
