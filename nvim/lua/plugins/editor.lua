@@ -18,7 +18,7 @@ return {
 	{
 		"nvim-neo-tree/neo-tree.nvim",
 		branch = "v3.x",
-		cmd = "Neotree",
+		lazy = vim.g.neovim_light_mode,
 		enabled = not vim.g.neovim_light_mode,
 		keys = {
 			{ "<C-n>", "<cmd>Neotree toggle<CR>", desc = "Toggle Neo-tree" },
@@ -42,7 +42,7 @@ return {
 			end
 
 			require("neo-tree").setup({
-				close_if_last_window = true,
+				close_if_last_window = false,
 				window = {
 					width = 30,
 					mappings = {
@@ -171,30 +171,6 @@ return {
 						},
 					},
 				},
-			})
-		end,
-	},
-
-	{
-		"akinsho/toggleterm.nvim",
-		cmd = { "ToggleTerm", "TermExec" },
-		config = function()
-			require("toggleterm").setup({
-				size = function(term)
-					if term.direction == "horizontal" then
-						return math.floor(vim.o.lines * 0.35)
-					elseif term.direction == "vertical" then
-						return math.floor(vim.o.columns * 0.35)
-					end
-				end,
-				direction = "horizontal",
-				close_on_exit = false,
-				persist_mode = true,
-				start_in_insert = true,
-				insert_mappings = true,
-				terminal_mappings = true,
-				shade_terminals = true,
-				shading_factor = 2,
 			})
 		end,
 	},

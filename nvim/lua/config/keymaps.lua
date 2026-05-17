@@ -21,11 +21,6 @@ map("i", "<C-S-k>", "<C-o>dd", { desc = "Delete line" })
 
 --- Window / Split Management ---
 
---- Terminal ---
-map("n", "<C-`>", "<cmd>ToggleTerm direction=horizontal<CR>", { desc = "Toggle terminal" })
-map("t", "<C-`>", "<cmd>ToggleTerm direction=horizontal<CR>", { desc = "Toggle terminal" })
-map("t", "<Esc>", "<C-\\><C-n>", { desc = "Terminal normal mode" })
-
 --- Telescope from leader ---
 map("n", "<leader>ff", "<cmd>Telescope find_files<CR>", { desc = "Find files" })
 map("n", "<leader>fg", "<cmd>Telescope live_grep<CR>", { desc = "Live grep" })
