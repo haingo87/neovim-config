@@ -1,6 +1,8 @@
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
+vim.g.neovim_orphan_group = (vim.fn.getenv("NVIM_ORPHAN_GROUP") == "1")
+
 local has_dir_arg = false
 local project_dir = nil
 
@@ -13,90 +15,45 @@ for i = 2, #vim.v.argv do
 	end
 end
 
-vim.g.neovim_light_mode = not has_dir_arg
-
 if project_dir then
 	vim.fn.chdir(project_dir)
 else
 	project_dir = vim.fn.getcwd()
 end
 
-if not vim.g.neovim_light_mode and project_dir then
-	vim.g.initial_cwd = project_dir
-	require("util.project").detect(project_dir)
-	if not vim.g.project then
-		vim.g.project_dirname = vim.fn.fnamemodify(project_dir, ":t")
-	end
-else
-	vim.g.initial_cwd = vim.fn.getcwd()
-	if not vim.g.project then
-		vim.g.project_dirname = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
-	end
+vim.g.initial_cwd = project_dir
+require("util.project").detect(vim.g.initial_cwd)
+
+local hash = require("util.hash")
+local project_root = vim.fn.fnamemodify(vim.fn.resolve(vim.g.initial_cwd), ":p"):gsub("/$", "")
+
+if not vim.g.neovim_orphan_group and not vim.g.project then
+	vim.g.project_dirname = vim.fn.fnamemodify(project_root, ":t")
 end
 
 local socket_dir = vim.fn.stdpath("state") .. "/sockets"
+vim.fn.mkdir(socket_dir, "p")
 local socket_name
 
-if not vim.g.neovim_light_mode and project_dir then
-	vim.fn.mkdir(socket_dir, "p")
-	local hash = require("util.hash")
-	socket_name = socket_dir .. "/nv-" .. hash.sha256_short(project_dir)
-
-	local is_dup = false
-
-	if vim.fn.filereadable(socket_name) == 1 then
-		local pipe = vim.uv.new_pipe(false)
-		local connected = false
-		local connect_err = nil
-		pipe:connect(socket_name, function(err)
-			connected = true
-			connect_err = err
-		end)
-		local start = vim.uv.now()
-		while not connected and (vim.uv.now() - start < 2000) do
-			vim.wait(50)
-		end
-		if connected and not connect_err then
-			is_dup = true
-			pipe:close()
-		else
-			if not pipe:is_closing() then
-				pipe:close()
-			end
-			os.remove(socket_name)
-		end
-	end
-
-	if is_dup then
-		local redirect = require("util.redirect")
-		for i = 2, #vim.v.argv do
-			local arg = vim.v.argv[i]
-			if type(arg) ~= "string" or arg == "" or arg:sub(1, 1) == "-" then
-				goto continue
-			end
-			local filepath = vim.fn.fnamemodify(arg, ":p")
-			if vim.fn.isdirectory(filepath) ~= 1 then
-				vim.fn.system({
-					"nvim", "--server", socket_name,
-					"--remote-expr",
-					string.format(
-						"require('util.redirect').open_file('%s')",
-						filepath:gsub("'", "\\'")
-					),
-				})
-			end
-			::continue::
-		end
-		redirect.bring_to_front()
-		vim.cmd("qa!")
-		return
-	end
+if vim.g.neovim_orphan_group then
+	socket_name = socket_dir .. "/nv-orphan.sock"
+else
+	socket_name = socket_dir .. "/nv-" .. hash.sha256_short(project_root)
 end
 
-vim.g.nvim_socket_name = nil
-
-if not vim.g.neovim_light_mode and project_dir then
-	pcall(os.remove, socket_name)
+-- Start server on deterministic socket so --remote can reach us.
+-- Skip if already listening on this socket (e.g., from --listen passed by nvim-open).
+-- Don't check serverlist() emptiness — Neovim has a default pipe server in the list.
+local already_listening = false
+for _, addr in ipairs(vim.fn.serverlist()) do
+	if addr == socket_name then
+		already_listening = true
+		vim.g.nvim_socket_name = socket_name
+		break
+	end
+end
+if not already_listening then
+	os.remove(socket_name)
 	local server_result = vim.fn.serverstart(socket_name)
 	if server_result ~= 0 then
 		vim.g.nvim_socket_name = socket_name
@@ -104,6 +61,9 @@ if not vim.g.neovim_light_mode and project_dir then
 		vim.notify("[session] Could not start server on " .. socket_name, vim.log.levels.WARN)
 	end
 end
+
+local should_register = not vim.g.neovim_orphan_group
+vim.g.daemon_registered = false
 
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -129,11 +89,42 @@ require("lazy").setup("plugins", {
 vim.api.nvim_create_autocmd("UIEnter", {
 	once = true,
 	callback = function()
-		if not vim.g.neovim_light_mode then
+		if should_register then
+			local session = require("util.session")
+			local result = session.register(project_root, vim.g.nvim_socket_name)
+			if result == false then
+				-- Daemon unreachable — instance works standalone but isn't routable
+				return
+			end
+			if type(result) == "table" and result.status == "dup" then
+				-- Duplicate instance for same project — route files and exit
+				local redirect = require("util.redirect")
+				for i = 2, #vim.v.argv do
+					local arg = vim.v.argv[i]
+					if type(arg) ~= "string" or arg == "" or arg:sub(1, 1) == "-" then
+						goto continue
+					end
+					local filepath = vim.fn.fnamemodify(arg, ":p")
+					if vim.fn.isdirectory(filepath) ~= 1 then
+						vim.fn.system({ "nvim", "--server", result.socket, "--remote", filepath })
+					end
+					::continue::
+				end
+				redirect.bring_to_front()
+				vim.cmd("qa!")
+				return
+			end
+			vim.g.daemon_registered = true
+		else
+			local session = require("util.session")
+			session.register(project_root, vim.g.nvim_socket_name, true)
+		end
+		if not vim.g.neovim_orphan_group then
 			vim.schedule(function()
 				vim.cmd("NvimTreeOpen")
 			end)
 		end
+		-- Detect macOS terminal window/tab for tab-aware window focus
 		if vim.env.TERM_PROGRAM then
 			local term = vim.env.TERM_PROGRAM
 			if term == "ghostty" or term == "Apple_Terminal" then
@@ -166,9 +157,10 @@ vim.api.nvim_create_autocmd("UIEnter", {
 vim.api.nvim_create_autocmd("VimLeave", {
 	once = true,
 	callback = function()
-		if vim.g.nvim_socket_name then
-			pcall(os.remove, vim.g.nvim_socket_name)
+		if vim.g.daemon_registered then
+			require("util.session").unregister(vim.g.nvim_socket_name)
 		end
+		pcall(os.remove, socket_name)
 	end,
 })
 
