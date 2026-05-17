@@ -228,6 +228,26 @@ return {
 					mode = "buffers",
 					close_command = "Bdelete %d",
 					right_mouse_command = "Bdelete %d",
+					left_mouse_command = function(bufnr)
+						local curwin = vim.api.nvim_get_current_win()
+						local curbuf = vim.api.nvim_win_get_buf(curwin)
+						if vim.bo[curbuf].filetype == "NvimTree" then
+							local target = nil
+							for _, win in ipairs(vim.api.nvim_list_wins()) do
+								local buf = vim.api.nvim_win_get_buf(win)
+								if vim.bo[buf].filetype ~= "NvimTree" and vim.bo[buf].buftype == "" then
+									target = win
+									break
+								end
+							end
+							if target then
+								vim.api.nvim_set_current_win(target)
+							else
+								vim.cmd("vsplit | enew")
+							end
+						end
+						pcall(vim.api.nvim_set_current_buf, bufnr)
+					end,
 					indicator = {
 						style = "none",
 					},
