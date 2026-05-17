@@ -83,6 +83,23 @@ return {
 				desc = "Close nvim-tree when last file buffer is closed",
 				callback = function()
 					if vim.bo.buftype == "terminal" then
+						local wins = vim.api.nvim_list_wins()
+						local tree_count = 0
+						local other_non_tree = 0
+						for _, win in ipairs(wins) do
+							if win ~= vim.api.nvim_get_current_win() then
+								local buf = vim.api.nvim_win_get_buf(win)
+								if vim.bo[buf].filetype == "NvimTree" then
+									tree_count = tree_count + 1
+								else
+									other_non_tree = other_non_tree + 1
+								end
+							end
+						end
+
+						if other_non_tree == 0 and tree_count > 0 then
+							vim.cmd("NvimTreeClose")
+						end
 						return
 					end
 
