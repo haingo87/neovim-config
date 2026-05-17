@@ -1,5 +1,4 @@
 vim.opt.number = true
-vim.opt.relativenumber = true
 vim.opt.signcolumn = "yes"
 
 vim.opt.expandtab = false
@@ -20,6 +19,8 @@ vim.opt.splitbelow = true
 vim.opt.scrolloff = 4
 vim.opt.sidescrolloff = 8
 
+vim.opt.list = true
+vim.opt.listchars = { tab = "» ", trail = "·", nbsp = "␣", space = "·" }
 vim.opt.cursorline = true
 vim.opt.colorcolumn = "120"
 

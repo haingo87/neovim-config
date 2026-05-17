@@ -1,6 +1,13 @@
 local map = vim.keymap.set
 
+--- Disable terminal flow control for <C-s> ---
+vim.api.nvim_set_keymap("n", "<C-s>", "<Nop>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("i", "<C-s>", "<Nop>", { noremap = true, silent = true })
+vim.cmd([[silent! stty -ixon --file /dev/stdin]])
+
 --- File / Buffer Operations ---
+map("n", "<C-s>", "<cmd>write<CR>", { desc = "Save file" })
+map("i", "<C-s>", "<C-o><cmd>write<CR>", { desc = "Save file" })
 map("n", "<C-w>", "<cmd>Bdelete<CR>", { desc = "Close buffer", nowait = true })
 map("n", "<leader>w", "<cmd>Bdelete<CR>", { desc = "Close buffer" })
 map("n", "<C-t>", ":Telescope find_files<CR>", { desc = "Find files" })
