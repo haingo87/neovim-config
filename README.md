@@ -51,8 +51,8 @@ On first launch, lazy.nvim will install all plugins. Open Mason (`:Mason`) to in
 
 | Invocation | Mode | Features |
 |------------|------|----------|
-| `nvim ./` or `nvim <dir>` | Project | Full: neo-tree, telescope, which-key, .nvproj, socket for external tools |
-| `nvim <file>` | Light | Minimal: no neo-tree, no telescope, no which-key |
+| `nvim ./` or `nvim <dir>` | Project | Full: nvim-tree, telescope, which-key, .nvproj, socket for external tools |
+| `nvim <file>` | Light | Minimal: no nvim-tree, no telescope, no which-key |
 | `nvim` (no args) | Light | Same as above |
 
 ### Duplicate Detection
@@ -104,8 +104,8 @@ return {
 | `env.type` | `"csharp"`, `"cpp"` | Determines LSP server, debug adapter, treesitter parsers |
 | `features.debug` | `true` / `false` | Enables nvim-dap + dap-ui |
 | `features.format_on_save` | `true` / `false` | Auto-format on write via conform.nvim |
-| `exclude.files` | `string[]` | File globs to hide in neo-tree and telescope |
-| `exclude.dirs` | `string[]` | Directory names to hide in neo-tree and telescope |
+| `exclude.files` | `string[]` | File globs to hide in telescope (and rg-based filtering) |
+| `exclude.dirs` | `string[]` | Directory names to hide in nvim-tree and telescope |
 
 ## Keybindings
 
@@ -186,7 +186,7 @@ return {
 - **conform.nvim** — Formatting via csharpier, clang-format, stylua
 
 ### Editor
-- **neo-tree.nvim** — File explorer (v3, project mode only)
+- **nvim-tree.lua** — File explorer (project mode only)
 - **telescope.nvim** — Fuzzy finder with fzf-native (project mode only)
 - **bufferline.nvim** — Buffer tabs with close buttons
 - **toggleterm.nvim** — Integrated terminal

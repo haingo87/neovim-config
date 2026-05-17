@@ -100,7 +100,7 @@ return {
 			local function close_dapui()
 				pcall(dapui.close)
 				for _, win in ipairs(vim.api.nvim_list_wins()) do
-					if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then
+					if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "NvimTree" then
 						vim.api.nvim_win_set_width(win, 30)
 					end
 				end

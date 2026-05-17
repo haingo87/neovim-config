@@ -11,8 +11,8 @@ return {
 		format_on_save = true,  -- conform.nvim auto-format on save
 	},
 	exclude = {
-		files = { "*.meta" },                        -- hide in neo-tree + telescope
-		dirs = { "Library", "Temp", "Build", "obj" }, -- hide in neo-tree + telescope
+		files = { "*.meta" },                        -- hide in telescope (rg-based filtering)
+		dirs = { "Library", "Temp", "Build", "obj" }, -- hide in nvim-tree + telescope
 	},
 }
 
@@ -27,6 +27,6 @@ return {
 -- 	},
 -- 	exclude = {
 -- 		files = {},
--- 		dirs = { "build", ".cache" },
+-- 		dirs = { "build", ".cache" }, -- hide in nvim-tree + telescope
 -- 	},
 -- }

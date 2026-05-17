@@ -14,7 +14,7 @@ return {
 					indent_blankline = { enabled = true },
 					lualine = true,
 					mason = true,
-					neotree = true,
+					nvim_tree = true,
 					dap = { enabled = true, enable_ui = true },
 					telescope = { enabled = true },
 					todo_comments = true,

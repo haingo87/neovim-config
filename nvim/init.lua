@@ -131,7 +131,7 @@ vim.api.nvim_create_autocmd("UIEnter", {
 	callback = function()
 		if not vim.g.neovim_light_mode then
 			vim.schedule(function()
-				vim.cmd("Neotree show")
+				vim.cmd("NvimTreeOpen")
 			end)
 		end
 		if vim.env.TERM_PROGRAM then

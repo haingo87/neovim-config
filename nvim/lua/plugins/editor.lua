@@ -16,57 +16,130 @@ return {
 	},
 
 	{
-		"nvim-neo-tree/neo-tree.nvim",
-		branch = "v3.x",
+		"nvim-tree/nvim-tree.lua",
 		lazy = vim.g.neovim_light_mode,
 		enabled = not vim.g.neovim_light_mode,
 		keys = {
-			{ "<C-n>", "<cmd>Neotree toggle<CR>", desc = "Toggle Neo-tree" },
+			{ "<C-n>", "<cmd>NvimTreeToggle<CR>", desc = "Toggle file tree" },
 		},
 		dependencies = {
-			"nvim-lua/plenary.nvim",
 			"nvim-tree/nvim-web-devicons",
-			"MunifTanjim/nui.nvim",
 		},
 		config = function()
-			local never_show = { ".DS_Store", "thumbs.db", ".git", "node_modules", "__pycache__" }
-			local never_show_patterns = { "*.meta", "*.asset" }
+			local exclude_dirs = { ".DS_Store", "thumbs.db", ".git", "node_modules", "__pycache__" }
 
 			if vim.g.project and vim.g.project.exclude then
-				if vim.g.project.exclude.files then
-					vim.list_extend(never_show_patterns, vim.g.project.exclude.files)
-				end
 				if vim.g.project.exclude.dirs then
-					vim.list_extend(never_show, vim.g.project.exclude.dirs)
+					vim.list_extend(exclude_dirs, vim.g.project.exclude.dirs)
 				end
 			end
 
-			require("neo-tree").setup({
-				close_if_last_window = false,
-				window = {
-					width = 30,
-					mappings = {
-						["<C-n>"] = "close_window",
-						["<bs>"] = function()
-							local commands = require("neo-tree.sources.filesystem.commands")
-							local state = require("neo-tree.sources.manager").get_state("filesystem")
-							if not state or state.path == vim.g.initial_cwd then
-								return
+			local tree_width = 30
+			local tree_actual_width = tree_width
+
+			require("nvim-tree").setup({
+				on_attach = function(bufnr)
+					local api = require("nvim-tree.api")
+
+					api.map.on_attach.default(bufnr)
+
+					if not vim.g.initial_cwd then
+						return
+					end
+
+					vim.keymap.del("n", "-", { buffer = bufnr })
+					vim.keymap.del("n", "<C-]>", { buffer = bufnr })
+					vim.keymap.del("n", "<2-RightMouse>", { buffer = bufnr })
+				end,
+				sync_root_with_cwd = false,
+				sort = {
+					sorter = "case_sensitive",
+				},
+				view = {
+					width = tree_width,
+				},
+				filters = {
+					dotfiles = false,
+					custom = exclude_dirs,
+				},
+				git = {
+					ignore = true,
+				},
+				renderer = {
+					root_folder_label = false,
+					group_empty = true,
+				},
+				actions = {
+					open_file = {
+						quit_on_open = false,
+						window_picker = {
+							enable = false,
+						},
+					},
+				},
+			})
+
+			vim.api.nvim_create_autocmd("QuitPre", {
+				desc = "Close nvim-tree when last file buffer is closed",
+				callback = function()
+					if vim.bo.buftype == "terminal" then
+						return
+					end
+
+					local wins = vim.api.nvim_list_wins()
+					local tree_count = 0
+					local non_tree_count = 0
+					for _, win in ipairs(wins) do
+						local buf = vim.api.nvim_win_get_buf(win)
+						if vim.bo[buf].filetype == "NvimTree" then
+							tree_count = tree_count + 1
+						else
+							non_tree_count = non_tree_count + 1
+						end
+					end
+
+					if tree_count > 0 and non_tree_count <= 1 then
+						vim.cmd("NvimTreeClose")
+					end
+				end,
+			})
+
+			local tree_actual_width = tree_width
+
+			vim.api.nvim_create_autocmd("WinResized", {
+				desc = "Track and preserve nvim-tree width",
+				callback = function()
+					for _, win in ipairs(vim.api.nvim_list_wins()) do
+						if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "NvimTree" then
+							local current = vim.api.nvim_win_get_width(win)
+							if current == tree_width and tree_actual_width ~= tree_width then
+								vim.api.nvim_win_set_width(win, tree_actual_width)
+							elseif current ~= tree_width then
+								tree_actual_width = current
 							end
-							commands.navigate_up(state)
-						end,
-					},
-				},
-				filesystem = {
-					bind_to_cwd = false,
-					filtered_items = {
-						visible = false,
-						hide_dotfiles = false,
-						hide_gitignored = true,
-						never_show = never_show,
-						never_show_by_pattern = never_show_patterns,
-					},
-				},
+							return
+						end
+					end
+				end,
+			})
+
+			vim.api.nvim_create_autocmd("BufEnter", {
+				desc = "Create new buffer if tree is the last window",
+				callback = function()
+					if vim.bo.filetype ~= "NvimTree" then return end
+
+					vim.schedule(function()
+						if #vim.api.nvim_list_wins() == 1 then
+							vim.cmd("vsplit | enew")
+							for _, win in ipairs(vim.api.nvim_list_wins()) do
+								if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "NvimTree" then
+									vim.api.nvim_win_set_width(win, tree_actual_width)
+									break
+								end
+							end
+						end
+					end)
+				end,
 			})
 		end,
 	},
@@ -164,7 +237,7 @@ return {
 					diagnostics = "nvim_lsp",
 					offsets = {
 						{
-							filetype = "neo-tree",
+							filetype = "NvimTree",
 							text = "Explorer",
 							highlight = "Directory",
 							text_align = "left",
