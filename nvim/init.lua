@@ -124,6 +124,7 @@ vim.api.nvim_create_autocmd("UIEnter", {
 				vim.cmd("NvimTreeOpen")
 			end)
 		end
+		require("util.redirect").init()
 		-- Detect macOS terminal window/tab for tab-aware window focus
 		if vim.env.TERM_PROGRAM then
 			local term = vim.env.TERM_PROGRAM

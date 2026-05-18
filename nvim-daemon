@@ -337,7 +337,7 @@ def main():
     args = parser.parse_args()
 
     if args.list:
-        daemon = Daemon(socket_path=args.socket, log_file=args.log_file, test_mode=True)
+        daemon = Daemon(socket_path=args.socket, log_file=args.log_file)
         daemon._load_sessions()
         daemon._prune_dead()
         instances = daemon.instances
@@ -345,8 +345,16 @@ def main():
             print("No registered instances.")
         else:
             for inst in instances:
+                alive = ""
+                try:
+                    os.kill(inst.pid, 0)
+                    alive = " [alive]"
+                except ProcessLookupError:
+                    alive = " [DEAD]"
+                except PermissionError:
+                    alive = " [alive]"
                 label = "(orphan)" if inst.orphan else inst.project_root
-                print(f"{label} -> {inst.socket} [alive]")
+                print(f"{label} -> {inst.socket}{alive}")
         sys.exit(0)
 
     daemon = Daemon(socket_path=args.socket, log_file=args.log_file, test_mode=args.test)

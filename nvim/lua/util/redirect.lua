@@ -1,5 +1,14 @@
 local M = {}
 
+function M.init()
+	if vim.fn.executable("xdotool") == 1 and not vim.env.WAYLAND_DISPLAY then
+		local wid = vim.fn.system({ "xdotool", "getactivewindow" }):gsub("%s+", "")
+		if wid ~= "" and tonumber(wid) then
+			M._x11_window = wid
+		end
+	end
+end
+
 function M.bring_to_front()
 	if vim.env.SSH_CONNECTION then
 		local pid = vim.fn.getpid()
@@ -76,13 +85,44 @@ function M._linux_focus()
 
 	vim.api.nvim_echo({ { "\027[1t", "" } }, false, {})
 
-	if vim.fn.executable("xdotool") == 1 then
-		vim.fn.jobstart({ "xdotool", "search", "--pid", vim.fn.getpid(), "windowactivate" }, { detach = true })
-	elseif vim.fn.executable("wmctrl") == 1 then
-		vim.fn.jobstart({ "wmctrl", "-a", M._terminal_process() }, { detach = true })
-	else
-		vim.notify("[session] Install wmctrl or xdotool for auto-focus", vim.log.levels.INFO)
+	if M._x11_window then
+		if vim.fn.executable("xdotool") == 1 then
+			vim.fn.system({
+				"xdotool", "windowactivate", M._x11_window,
+				"set_window", "--urgency", "1", M._x11_window,
+			})
+		end
+		return
 	end
+
+	if vim.fn.executable("xdotool") == 1 then
+		local pid = vim.fn.getpid()
+		for _ = 1, 10 do
+			local wid = vim.fn.system({
+				"xdotool", "search", "--pid", tostring(pid),
+				"--limit", "1",
+			}):gsub("%s+", "")
+			if wid ~= "" and tonumber(wid) then
+				vim.fn.system({ "xdotool", "windowactivate", wid })
+				return
+			end
+			local ppid = vim.fn.system({ "ps", "-p", tostring(pid), "-o", "ppid=" })
+			ppid = tonumber((ppid:gsub("%D+", "")))
+			if not ppid or ppid <= 1 then break end
+			pid = ppid
+		end
+	else
+		vim.notify("[session] Install xdotool for auto-focus", vim.log.levels.INFO)
+	end
+end
+
+function M.focus_info()
+	if not M._x11_window then return "" end
+	local info = M._x11_window
+	if vim.g.project_dirname then
+		info = info .. ":" .. vim.g.project_dirname
+	end
+	return info
 end
 
 function M._tmux_focus()
@@ -90,15 +130,6 @@ function M._tmux_focus()
 	if pane and pane ~= "" then
 		vim.fn.system({ "tmux", "select-pane", "-t", pane })
 	end
-end
-
-function M._terminal_process()
-	local ppid = vim.uv.os_getppid()
-	local cmd = vim.fn.system({ "ps", "-p", tostring(ppid), "-o", "comm=" }):gsub("%s+", "")
-	if cmd == "" then
-		cmd = "Terminal"
-	end
-	return cmd
 end
 
 return M

@@ -137,9 +137,109 @@ def _nvim_remote(socket_path, filepath, line=None, col=None, verbose=False):
         )
         if verbose:
             print(f"Sent {filepath} to {socket_path}", file=sys.stderr)
+
+        # Activate window and switch tab
+        try:
+            result = subprocess.run(
+                ["nvim", "--server", socket_path, "--remote-expr",
+                 "v:lua.require('util.redirect').focus_info()"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL, timeout=5, env=env,
+            )
+            if result.returncode == 0:
+                info = result.stdout.decode().strip()
+                if info and shutil.which("xdotool"):
+                    if ":" in info:
+                        wid, project_dirname = info.split(":", 1)
+                    else:
+                        wid = info
+                        project_dirname = None
+
+                    subprocess.run(
+                        ["xdotool", "windowactivate", wid],
+                        timeout=5, capture_output=True, text=True,
+                    )
+                    time.sleep(0.15)
+                    tab_idx = _find_nvim_tab_atspi(
+                        project_dirname=project_dirname, filepath=filepath,
+                    )
+                    if tab_idx >= 0:
+                        key = f"alt+{tab_idx + 1}" if tab_idx < 9 else "alt+0"
+                        subprocess.run(
+                            ["xdotool", "key", key],
+                            timeout=5, capture_output=True, text=True,
+                        )
+                    time.sleep(0.3)
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
         return True
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return False
+
+
+def _find_atspi_tab_list(root):
+    """Recursively find the first ROLE_PAGE_TAB_LIST child in the AT-SPI tree."""
+    import pyatspi
+    try:
+        if root.getRole() == pyatspi.ROLE_PAGE_TAB_LIST:
+            return root
+    except Exception:
+        pass
+    for i in range(root.childCount):
+        try:
+            result = _find_atspi_tab_list(root[i])
+            if result is not None:
+                return result
+        except Exception:
+            pass
+    return None
+
+
+def _find_nvim_tab_atspi(project_dirname=None, filepath=None):
+    """Find nvim's tab index via AT-SPI2 tab name matching.
+
+    Returns 0-based tab index, or -1 if not found / pyatspi unavailable.
+    """
+    try:
+        import pyatspi
+    except ImportError:
+        return -1
+
+    try:
+        desktop = pyatspi.Registry.getDesktop(0)
+        xfce_app = next((a for a in desktop if a.name == "xfce4-terminal"), None)
+        if xfce_app is None:
+            return -1
+
+        for win in xfce_app:
+            if win.getRoleName() != "frame":
+                continue
+            tab_list = _find_atspi_tab_list(win)
+            if tab_list is None:
+                continue
+
+            for ti in range(tab_list.childCount):
+                tab = tab_list[ti]
+                if project_dirname:
+                    candidates = [
+                        tab.name.startswith(project_dirname + " - "),
+                        tab.name.startswith(project_dirname + " | "),
+                        tab.name == project_dirname,
+                    ]
+                    match = any(candidates)
+                elif filepath:
+                    fname = os.path.basename(filepath)
+                    match = tab.name == fname
+                else:
+                    match = False
+
+                if match:
+                    return ti
+
+        return -1
+
+    except Exception:
+        return -1
 
 
 def _launch_orphan(filepath, verbose=False):

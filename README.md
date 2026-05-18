@@ -123,7 +123,7 @@ nvim-open <file|directory>
 
 **Redirect strategy:** When a `dup` instance exits, `redirect.lua` brings the original window to focus:
 - **macOS:** `osascript` to bring the terminal process to front
-- **Linux X11:** `wmctrl` or `xdotool` to activate the terminal window
+- **Linux X11:** `xdotool` to activate the terminal window and switch tabs via AT-SPI2 (`python-atspi`)
 - **tmux:** `tmux select-pane` to switch to the right pane
 - **SSH/Wayland:** Notification only (auto-focus unavailable)
 

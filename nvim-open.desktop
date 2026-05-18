@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Hai's nvim
+Comment=Open files in the correct running Neovim instance
+Exec=nvim-open %f
+Icon=nvim
+Terminal=true
+Categories=TextEditor;Development;Utility;
+MimeType=inode/directory;text/plain;text/x-c;text/x-c++src;text/x-c++hdr;text/x-csrc;text/x-chdr;text/x-csharp;text/x-python;text/x-lua;text/x-java;text/x-markdown;text/x-json;text/x-yaml;text/x-toml;text/xml;text/x-sh;text/x-script;text/x-changelog;text/x-log;text/css;text/x-asm;text/x-sql;text/x-dockerfile;text/x-makefile;text/x-cmake;text/x-fsharp;text/x-typescript;text/x-javascript;text/x-ruby;text/x-go;text/x-rust;text/x-haskell;application/json;application/xml;
