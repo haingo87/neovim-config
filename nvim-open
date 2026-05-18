@@ -394,7 +394,11 @@ def _launch_orphan(filepath, verbose=False):
         os.remove(ORPHAN_SOCKET)
     env = _nvim_env()
     env["NVIM_ORPHAN_GROUP"] = "1"
-    cmd = ["nvim", "--listen", ORPHAN_SOCKET, filepath]
+    cmd = [
+        "nvim", "--listen", ORPHAN_SOCKET,
+        "--cmd", "lua vim.g.neovim_orphan_group=true",
+        filepath,
+    ]
     if verbose:
         print(f"Launching orphan with {filepath}", file=sys.stderr)
     if sys.stdin.isatty():
@@ -408,9 +412,9 @@ def _launch_project(dirpath, verbose=False):
         print(f"Launching project instance in {dirpath}", file=sys.stderr)
     if sys.stdin.isatty():
         env = _nvim_env()
-        subprocess.run(["nvim"], cwd=dirpath, env=env)
+        subprocess.run(["nvim", dirpath], cwd=dirpath, env=env)
     else:
-        _spawn_terminal_tab(["nvim"], cwd=dirpath, verbose=verbose)
+        _spawn_terminal_tab(["nvim", dirpath], cwd=dirpath, verbose=verbose)
 
 
 def _parse_path_with_line(filepath):
