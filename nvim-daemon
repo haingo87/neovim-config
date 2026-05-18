@@ -15,6 +15,8 @@ import subprocess
 import select
 import sys
 import time
+import hashlib
+import dataclasses
 
 SOCKET_DIR = os.path.join(
     os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
@@ -26,6 +28,26 @@ SESSIONS_FILE = os.path.join(SOCKET_DIR, "sessions.json")
 LOG_FILE = os.path.join(SOCKET_DIR, "daemon.log")
 
 IDLE_TIMEOUT = 300  # 5 minutes
+
+LSP_SOCKET_DIR = os.path.join(SOCKET_DIR, "lsp")
+
+
+def sha256_short(data):
+    """Match hash.lua:sha256_short — first 12 hex chars of sha256."""
+    return hashlib.sha256(data.encode()).hexdigest()[:12]
+
+
+@dataclasses.dataclass
+class LspServer:
+    server_type: str       # "clangd"
+    cwd: str               # canonicalized cwd — lookup key is (type, cwd)
+    proc: subprocess.Popen # clangd process (direct child)
+    socket_path: str       # ~/.local/state/nvim/lsp/clangd-<sha256>
+    refcount: int = 1
+    clients: set = dataclasses.field(default_factory=set)  # set[int] — nvim PIDs
+    started_at: float = dataclasses.field(default_factory=time.time)
+    kill_at: float = None  # grace period deadline (None = active)
+    pending: bool = False  # True during async spawn
 
 
 class Instance:
@@ -69,6 +91,9 @@ class Daemon:
         self.test_mode = test_mode
         self.server_socket = None
         self.connections = {}  # socket object -> buffer string
+        self.lsp_servers = {}     # (type, cwd) -> LspServer
+        self.lsp_pending = {}     # (type, cwd) -> LspServer (pending=True)
+        self._last_prune = time.time()
 
         log_path = log_file or os.path.join(self.state_dir, "daemon.log")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -105,6 +130,20 @@ class Daemon:
                 alive.append(inst)
         self.instances = alive
 
+        # After pruning instances, clean up LSP clients whose nvim PID is gone.
+        # Iterate both active and pending servers — a crashed nvim may have
+        # started an LSP spawn (pending) but never completed it.
+        for server in list(self.lsp_servers.values()) + list(self.lsp_pending.values()):
+            dead_clients = set()
+            for cpid in server.clients:
+                if not any(i.pid == cpid for i in self.instances):
+                    dead_clients.add(cpid)
+            for cpid in dead_clients:
+                server.clients.remove(cpid)
+                server.refcount = max(0, server.refcount - 1)
+            if server.refcount <= 0:
+                server.kill_at = time.time() + 30
+
     def _find_by_root(self, project_root):
         """Find an alive instance with matching project_root. Returns Instance or None."""
         for inst in self.instances:
@@ -118,6 +157,20 @@ class Daemon:
             if inst.orphan:
                 return inst
         return None
+
+    def _kill_lsp_server(self, server):
+        """Terminate an LSP server process and remove its socket."""
+        if server.proc:
+            server.proc.terminate()
+            try:
+                server.proc.wait(timeout=5)
+            except Exception:
+                server.proc.kill()
+        if server.socket_path and os.path.exists(server.socket_path):
+            try:
+                os.unlink(server.socket_path)
+            except OSError:
+                pass
 
     def _save_sessions(self):
         """Persist instances to sessions.json."""
@@ -216,12 +269,96 @@ class Daemon:
         self._prune_dead()
         return {"status": "ok", "instances": [inst.to_dict() for inst in self.instances]}
 
+    def handle_lsp_start(self, msg):
+        self._prune_dead()
+        server_type = msg["type"]
+        cwd = os.path.realpath(msg["cwd"])
+        pid = msg["pid"]
+
+        key = (server_type, cwd)
+
+        server = self.lsp_servers.get(key) or self.lsp_pending.get(key)
+
+        if server:
+            if server.kill_at:
+                server.kill_at = None
+            if server.pending:
+                return {"status": "pending", "retry_after_ms": 500}
+            server.refcount += 1
+            server.clients.add(pid)
+            return {"status": "ok", "socket_path": server.socket_path}
+
+        socket_path = os.path.join(
+            LSP_SOCKET_DIR,
+            f"{server_type}-{sha256_short(cwd)}.sock",
+        )
+        os.makedirs(LSP_SOCKET_DIR, exist_ok=True)
+
+        server = LspServer(
+            server_type=server_type,
+            cwd=cwd,
+            proc=None,
+            socket_path=socket_path,
+            pending=True,
+        )
+        server.clients.add(pid)
+        self.lsp_pending[key] = server
+
+        try:
+            proc = subprocess.Popen(
+                ["clangd", f"--socket={socket_path}"],
+                cwd=cwd,
+            )
+            server.proc = proc
+            self.log.info("Spawned %s for %s (pid=%d), awaiting socket...", server_type, cwd, proc.pid)
+        except Exception as e:
+            self.log.error("Failed to spawn %s: %s", server_type, e)
+            del self.lsp_pending[key]
+            return {"status": "error", "message": str(e)}
+
+        return {"status": "pending", "retry_after_ms": 500}
+
+    def handle_lsp_stop(self, msg):
+        self._prune_dead()
+        server_type = msg["type"]
+        cwd = os.path.realpath(msg["cwd"])
+        pid = msg["pid"]
+
+        key = (server_type, cwd)
+        server = self.lsp_servers.get(key) or self.lsp_pending.get(key)
+        if not server:
+            return {"status": "ok"}
+
+        server.clients.discard(pid)
+        server.refcount = max(0, server.refcount - 1)
+
+        if server.refcount <= 0 and not server.pending:
+            server.kill_at = time.time() + 30
+        return {"status": "ok"}
+
+    def handle_lsp_list(self, _msg):
+        self._prune_dead()
+        servers = []
+        for (server_type, cwd), s in self.lsp_servers.items():
+            servers.append({
+                "type": server_type,
+                "cwd": cwd,
+                "server_pid": s.proc.pid if s.proc else None,
+                "socket_path": s.socket_path,
+                "refcount": s.refcount,
+                "clients": list(s.clients),
+            })
+        return {"status": "ok", "servers": servers}
+
     COMMANDS = {
         "register": handle_register,
         "unregister": handle_unregister,
         "open": handle_open,
         "list": handle_list,
         "ping": lambda self, _msg: {"status": "ok"},
+        "lsp_start": handle_lsp_start,
+        "lsp_stop": handle_lsp_stop,
+        "lsp_list": handle_lsp_list,
     }
 
     def process_line(self, line):
@@ -261,6 +398,23 @@ class Daemon:
         self._load_sessions()
 
         os.makedirs(self.state_dir, exist_ok=True)
+        os.makedirs(LSP_SOCKET_DIR, exist_ok=True)
+        for fname in os.listdir(LSP_SOCKET_DIR):
+            fpath = os.path.join(LSP_SOCKET_DIR, fname)
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.settimeout(0.5)
+                s.connect(fpath)
+                s.close()
+                # socket is alive — leave it
+            except (ConnectionRefusedError, FileNotFoundError):
+                try:
+                    os.unlink(fpath)
+                    self.log.info("Cleaned stale LSP socket: %s", fpath)
+                except OSError:
+                    pass
+            except (OSError, socket.timeout):
+                pass
         if os.path.exists(self.socket_path):
             os.unlink(self.socket_path)
 
@@ -276,9 +430,39 @@ class Daemon:
 
         try:
             while True:
-                if not self.instances and (time.time() - self.last_activity) > IDLE_TIMEOUT:
+                if not self.instances and not self.lsp_servers and (time.time() - self.last_activity) > IDLE_TIMEOUT:
                     self.log.info("Idle timeout, shutting down")
                     break
+
+                now = time.time()
+
+                # Periodic prune (every 30s, or on demand via command handlers)
+                if now - self._last_prune > 30:
+                    self._prune_dead()
+                    self._last_prune = now
+
+                # Check pending LSP servers: if socket file exists, transition to active
+                for key in list(self.lsp_pending.keys()):
+                    server = self.lsp_pending[key]
+                    if os.path.exists(server.socket_path):
+                        server.pending = False
+                        del self.lsp_pending[key]
+                        self.lsp_servers[key] = server
+                        self.log.info("LSP server %s/%s ready on %s", server.server_type, server.cwd, server.socket_path)
+                    elif now - server.started_at > 30:
+                        self.log.error("LSP %s/%s socket not ready after 30s, giving up", server.server_type, server.cwd)
+                        self._kill_lsp_server(server)
+                        del self.lsp_pending[key]
+
+                # Grace period: kill servers whose kill_at has elapsed
+                kill_list = []
+                for key, server in self.lsp_servers.items():
+                    if server.kill_at and now >= server.kill_at:
+                        kill_list.append(key)
+                for key in kill_list:
+                    server = self.lsp_servers.pop(key)
+                    self._kill_lsp_server(server)
+                    self.log.info("Grace period expired for %s/%s, killed", server.server_type, server.cwd)
 
                 readable, _, _ = select.select(
                     [self.server_socket] + list(self.connections.keys()),
@@ -313,6 +497,9 @@ class Daemon:
             self.log.info("Interrupted, shutting down")
         finally:
             self._save_sessions()
+            for server in list(self.lsp_servers.values()):
+                self._kill_lsp_server(server)
+            self.lsp_servers.clear()
             for sock in list(self.connections.keys()):
                 self.connections.pop(sock, None)
                 try:
