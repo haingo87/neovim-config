@@ -1,5 +1,7 @@
 local M = {}
 
+local features = require("util.features")
+
 M.cache = {}
 
 function M.detect(cwd)
@@ -14,12 +16,14 @@ function M.detect(cwd)
 	if #found > 0 then
 		local path = found[1]
 		vim.g.project_dirname = vim.fn.fnamemodify(path, ":h:t")
+		vim.g.project_nvproj_path = path
 		local chunk, load_err = loadfile(path)
 		if chunk then
 			local ok, parsed = pcall(chunk)
 			if ok and type(parsed) == "table" then
 				result = parsed
 				vim.g.project = parsed
+				features.load(parsed, path)
 				vim.notify("[project] Loaded " .. path, vim.log.levels.INFO)
 			else
 				vim.notify("[project] Failed to parse " .. path .. ": " .. tostring(parsed), vim.log.levels.WARN)
@@ -30,6 +34,8 @@ function M.detect(cwd)
 	else
 		vim.g.project = nil
 		vim.g.project_dirname = nil
+		vim.g.project_nvproj_path = nil
+		features.flush()
 	end
 
 	M.cache[cwd] = result
@@ -40,20 +46,29 @@ function M.ensure_lsp_servers()
 	local base = { "lua_ls", "jsonls", "yamlls", "marksman" }
 	local servers = vim.deepcopy(base)
 
-	if vim.g.project and vim.g.project.env then
-		local t = vim.g.project.env.type
-		if t == "csharp" then
-			local ok, registry = pcall(require, "mason-registry")
-			if ok and not registry.is_installed("roslyn") then
-				vim.schedule(function()
-					vim.cmd("MasonInstall roslyn")
-				end)
-			end
-		elseif t == "cpp" then
-			table.insert(servers, "clangd")
+	if features.has("csharp") then
+		local ok, registry = pcall(require, "mason-registry")
+		if ok and not registry.is_installed("roslyn") then
+			vim.schedule(function()
+				vim.cmd("MasonInstall roslyn")
+			end)
 		end
 	end
+	if features.has("cpp") then
+		table.insert(servers, "clangd")
+	end
+	if features.has("cmake") then
+		table.insert(servers, "cmake_ls")
+	end
+	if features.has("go") then
+		table.insert(servers, "gopls")
+	end
+	if features.has("dart") then
+		table.insert(servers, "dartls")
+	end
 
+	-- Verify Mason package names match mason-lspconfig's mapping:
+	-- cmake_ls, gopls, dartls must exist in Mason registry
 	local status, mason_lspconfig = pcall(require, "mason-lspconfig")
 	if status then
 		mason_lspconfig.setup({
@@ -66,16 +81,19 @@ function M.ensure_lsp_servers()
 end
 
 function M.ensure_dap_adapters()
-	if not vim.g.project or not vim.g.project.features or not vim.g.project.features.debug then
+	if not features.has("debug") then
 		return
 	end
 
 	local adapters = {}
-	local t = vim.g.project.env and vim.g.project.env.type
-	if t == "csharp" then
-		adapters = { "netcoredbg" }
-	elseif t == "cpp" then
-		adapters = { "codelldb" }
+	if features.has("csharp") then
+		table.insert(adapters, "netcoredbg")
+	end
+	if features.has("cpp") then
+		table.insert(adapters, "codelldb")
+	end
+	if features.has("go") then
+		table.insert(adapters, "delve")
 	end
 
 	local status, mason_nvim_dap = pcall(require, "mason-nvim-dap")
