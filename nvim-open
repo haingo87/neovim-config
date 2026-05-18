@@ -8,8 +8,10 @@ via the nvim-daemon. Unmatched files go to the orphan instance.
 import argparse
 import json
 import os
-import socket
+import re
+import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -23,6 +25,150 @@ SOCKETS_DIR = os.path.join(SOCKET_DIR, "sockets")
 ORPHAN_SOCKET = os.path.join(SOCKETS_DIR, "nv-orphan.sock")
 DAEMON_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nvim-daemon")
 TIMEOUT = 5
+
+# Terminals that can open a new tab running a command.
+# Each entry: prefix args + nvim args are appended.
+# "shell": True means -e expects a single shell-quoted string.
+_TAB_TERMINALS = {
+    "xfce4-terminal":   { "pre": ["--tab", "-x"],          "wd": "--working-directory" },
+    "gnome-terminal":   { "pre": ["--tab", "--"],          "wd": "--working-directory" },
+    "mate-terminal":    { "pre": ["--tab", "-x"],          "wd": "--working-directory" },
+    "konsole":          { "pre": ["--new-tab", "-e"],      "wd": "--working-directory" },
+    "terminator":       { "pre": ["--new-tab", "-x"],      "wd": "--working-directory" },
+    "tilix":            { "pre": ["--action=app-new-session", "-e"], "wd": "--working-directory", "shell": True },
+}
+
+# Terminals with no tab support — open a new window.
+_NEW_WINDOW_TERMINALS = {
+    "xterm":     { "pre": ["-e"] },
+    "uxterm":    { "pre": ["-e"] },
+    "alacritty": { "pre": ["-e"] },
+    "st":        { "pre": ["-e"] },
+}
+
+
+def _wezterm_tab_cmd(cmd_args, cwd=None):
+    base = ["wezterm", "cli", "spawn"]
+    if cwd:
+        base += ["--cwd", cwd]
+    return base + ["--"] + cmd_args
+
+
+def _kitty_tab_cmd(cmd_args, cwd=None):
+    base = ["kitty", "@", "new-window", "--new-tab"]
+    if cwd:
+        base += ["--cwd", cwd]
+    return base + ["--"] + cmd_args
+
+
+_SPECIAL_TERMINALS = {
+    "wezterm": _wezterm_tab_cmd,
+    "kitty":   _kitty_tab_cmd,
+}
+
+
+def _detect_terminal():
+    """Detect the terminal emulator to create tabs in.
+
+    Tries multiple methods in order:
+    1. X11 active window WM_CLASS (most reliable on X11)
+    2. Walk parent PID chain from current process
+    3. $TERMINAL environment variable
+    Returns the terminal binary name (lowercase), or None.
+    """
+    known = set(_TAB_TERMINALS) | set(_NEW_WINDOW_TERMINALS) | set(_SPECIAL_TERMINALS)
+
+    if shutil.which("xdotool") and shutil.which("xprop"):
+        try:
+            wid = subprocess.run(
+                ["xdotool", "getactivewindow"],
+                capture_output=True, text=True, timeout=2,
+            ).stdout.strip()
+            if wid:
+                wm = subprocess.run(
+                    ["xprop", "-id", wid, "WM_CLASS"],
+                    capture_output=True, text=True, timeout=2,
+                ).stdout
+                m = re.findall(r'"([^"]+)"', wm)
+                if len(m) >= 2:
+                    return m[1].lower()
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+            pass
+
+    try:
+        pid = os.getpid()
+        for _ in range(10):
+            comm = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "comm="],
+                capture_output=True, text=True, timeout=2,
+            ).stdout.strip().lower()
+            if comm in known:
+                return comm
+            ppid = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "ppid="],
+                capture_output=True, text=True, timeout=2,
+            ).stdout.strip()
+            pid = int(ppid) if ppid else 1
+            if pid <= 1:
+                break
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        pass
+
+    term = os.environ.get("TERMINAL", "").lower()
+    if term:
+        return term
+
+    return None
+
+
+def _spawn_terminal_tab(cmd_args, cwd=None, verbose=False):
+    """Spawn a command in a new terminal tab (or window if tabs unsupported).
+
+    Detects the running terminal and uses its native tab-creation method.
+    Falls back to xterm -e if unknown terminal or detection fails.
+    """
+    terminal = _detect_terminal()
+    if verbose:
+        name = terminal or "xterm (fallback)"
+        print(f"Terminal: {name}", file=sys.stderr)
+
+    env = os.environ.copy()
+    env.pop("NVIM", None)
+
+    if terminal in _SPECIAL_TERMINALS:
+        full_cmd = _SPECIAL_TERMINALS[terminal](cmd_args, cwd)
+        if verbose:
+            print(f"Running: {shlex.join(full_cmd)}", file=sys.stderr)
+        subprocess.Popen(full_cmd, env=env, start_new_session=True)
+        return
+
+    if terminal in _TAB_TERMINALS:
+        info = _TAB_TERMINALS[terminal]
+        base_cmd = [terminal] + list(info["pre"])
+        if cwd and info["wd"]:
+            base_cmd += [info["wd"], cwd]
+        cmd_part = [shlex.join(cmd_args)] if info.get("shell") else cmd_args
+        full_cmd = base_cmd + cmd_part
+        if verbose:
+            print(f"Running: {shlex.join(full_cmd)}", file=sys.stderr)
+        subprocess.Popen(full_cmd, env=env, start_new_session=True)
+        return
+
+    if terminal in _NEW_WINDOW_TERMINALS:
+        info = _NEW_WINDOW_TERMINALS[terminal]
+        full_cmd = [terminal] + list(info["pre"]) + cmd_args
+        if verbose:
+            print(f"Running: {shlex.join(full_cmd)}", file=sys.stderr)
+        subprocess.Popen(full_cmd, env=env, start_new_session=True)
+        return
+
+    if shutil.which("xfce4-terminal"):
+        full_cmd = ["xfce4-terminal", "--tab", "-x"] + cmd_args
+    else:
+        full_cmd = ["xterm", "-e"] + cmd_args
+    if verbose:
+        print(f"Running: {shlex.join(full_cmd)}", file=sys.stderr)
+    subprocess.Popen(full_cmd, env=env, start_new_session=True)
 
 
 def _connect_daemon(verbose=False):
@@ -254,17 +400,17 @@ def _launch_orphan(filepath, verbose=False):
     if sys.stdin.isatty():
         subprocess.run(cmd, env=env)
     else:
-        subprocess.Popen(cmd, env=env, start_new_session=True)
+        _spawn_terminal_tab(cmd, verbose=verbose)
 
 
 def _launch_project(dirpath, verbose=False):
-    env = _nvim_env()
     if verbose:
         print(f"Launching project instance in {dirpath}", file=sys.stderr)
     if sys.stdin.isatty():
+        env = _nvim_env()
         subprocess.run(["nvim"], cwd=dirpath, env=env)
     else:
-        subprocess.Popen(["nvim"], cwd=dirpath, env=env, start_new_session=True)
+        _spawn_terminal_tab(["nvim"], cwd=dirpath, verbose=verbose)
 
 
 def _parse_path_with_line(filepath):
