@@ -21,8 +21,8 @@ return {
 			},
 		},
 		config = function()
-			local project = vim.g.project
-			if not (project and project.features and project.features.debug == true) then
+			local f = require("util.features")
+			if not f.has("debug") then
 				return
 			end
 
@@ -36,37 +36,72 @@ return {
 				return {}
 			end
 
-			if project and project.env then
-				if project.env.type == "csharp" then
-					local unity_ok = pcall(require, "nvim-dap-unity")
-					if unity_ok then
-						require("nvim-dap-unity").setup({
-							auto_install_on_start = false,
-						})
-					end
-				elseif project.env.type == "cpp" then
-					dap.adapters.codelldb = {
-						type = "server",
-						port = "${port}",
-						executable = {
-							command = "codelldb",
-							args = { "--port", "${port}" },
-						},
-					}
-					dap.configurations.c = {
-						{
-							name = "Launch (codelldb)",
-							type = "codelldb",
-							request = "launch",
-							program = function()
-								return vim.fn.input("Path to executable: ", vim.fn.getcwd() .. "/build/", "file")
-							end,
-							cwd = "${workspaceFolder}",
-							stopOnEntry = false,
-						},
-					}
-					dap.configurations.cpp = dap.configurations.c
+			if f.has("csharp") and f.has("unity") then
+				local unity_ok = pcall(require, "nvim-dap-unity")
+				if unity_ok then
+					require("nvim-dap-unity").setup({
+						auto_install_on_start = false,
+					})
 				end
+			end
+
+			if f.has("cpp") then
+				dap.adapters.codelldb = {
+					type = "server",
+					port = "${port}",
+					executable = {
+						command = "codelldb",
+						args = { "--port", "${port}" },
+					},
+				}
+				dap.configurations.c = {
+					{
+						name = "Launch (codelldb)",
+						type = "codelldb",
+						request = "launch",
+						program = function()
+							return vim.fn.input("Path to executable: ", vim.fn.getcwd() .. "/build/", "file")
+						end,
+						cwd = "${workspaceFolder}",
+						stopOnEntry = false,
+					},
+				}
+				dap.configurations.cpp = dap.configurations.c
+			end
+
+			if f.has("go") then
+				dap.adapters.delve = {
+					type = "server",
+					port = "${port}",
+					executable = {
+						command = "dlv",
+						args = { "dap", "-l", "127.0.0.1:${port}" },
+					},
+				}
+				dap.configurations.go = {
+					{
+						type = "delve",
+						name = "Debug",
+						request = "launch",
+						program = "${file}",
+					},
+				}
+			end
+
+			if f.has("flutter") then
+				dap.adapters.dart = {
+					type = "executable",
+					command = "flutter",
+					args = { "debug-adapter" },
+				}
+				dap.configurations.dart = {
+					{
+						type = "dart",
+						name = "Flutter",
+						request = "launch",
+						program = "${workspaceFolder}/lib/main.dart",
+					},
+				}
 			end
 
 			local dapui = require("dapui")
