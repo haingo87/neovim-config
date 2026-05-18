@@ -284,9 +284,15 @@ class Daemon:
                 server.kill_at = None
             if server.pending:
                 return {"status": "pending", "retry_after_ms": 500}
+            if pid in server.clients:
+                return {"status": "ok", "socket_path": server.socket_path}
             server.refcount += 1
             server.clients.add(pid)
             return {"status": "ok", "socket_path": server.socket_path}
+
+        if server_type != "clangd":
+            self.log.warning("LSP server type %s not supported for shared mode", server_type)
+            return {"status": "error", "message": f"shared LSP only supports clangd, not {server_type}"}
 
         socket_path = os.path.join(
             LSP_SOCKET_DIR,
@@ -441,28 +447,38 @@ class Daemon:
                     self._prune_dead()
                     self._last_prune = now
 
-                # Check pending LSP servers: if socket file exists, transition to active
+                # Check pending LSP servers: if socket is accepting, transition to active
                 for key in list(self.lsp_pending.keys()):
                     server = self.lsp_pending[key]
                     if os.path.exists(server.socket_path):
-                        server.pending = False
-                        del self.lsp_pending[key]
-                        self.lsp_servers[key] = server
-                        self.log.info("LSP server %s/%s ready on %s", server.server_type, server.cwd, server.socket_path)
+                        try:
+                            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                            s.settimeout(0.1)
+                            s.connect(server.socket_path)
+                            s.close()
+                            server.pending = False
+                            del self.lsp_pending[key]
+                            self.lsp_servers[key] = server
+                            self.log.info("LSP server %s/%s ready on %s", server.server_type, server.cwd, server.socket_path)
+                        except (ConnectionRefusedError, socket.timeout, OSError):
+                            pass  # socket exists but not accepting yet
                     elif now - server.started_at > 30:
                         self.log.error("LSP %s/%s socket not ready after 30s, giving up", server.server_type, server.cwd)
                         self._kill_lsp_server(server)
                         del self.lsp_pending[key]
 
-                # Grace period: kill servers whose kill_at has elapsed
-                kill_list = []
-                for key, server in self.lsp_servers.items():
-                    if server.kill_at and now >= server.kill_at:
-                        kill_list.append(key)
-                for key in kill_list:
-                    server = self.lsp_servers.pop(key)
-                    self._kill_lsp_server(server)
-                    self.log.info("Grace period expired for %s/%s, killed", server.server_type, server.cwd)
+                # Grace period: kill servers whose kill_at has elapsed.
+                # Check both active servers and pending servers (pending may have
+                # kill_at set by _prune_dead if all clients died before socket appeared).
+                for pool in (self.lsp_servers, self.lsp_pending):
+                    kill_list = []
+                    for key, server in pool.items():
+                        if server.kill_at and now >= server.kill_at:
+                            kill_list.append(key)
+                    for key in kill_list:
+                        server = pool.pop(key)
+                        self._kill_lsp_server(server)
+                        self.log.info("Grace period expired for %s/%s, killed", server.server_type, server.cwd)
 
                 readable, _, _ = select.select(
                     [self.server_socket] + list(self.connections.keys()),
