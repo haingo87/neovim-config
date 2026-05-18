@@ -80,38 +80,49 @@ return {
 
 			vim.lsp.enable({ "lua_ls", "jsonls", "yamlls", "marksman" })
 
-			if vim.g.project and vim.g.project.env then
-				local t = vim.g.project.env.type
-				if t == "csharp" then
-					vim.lsp.config("roslyn", {
-						cmd = {
-							"roslyn",
-							"--logLevel",
-							"Information",
-							"--extensionLogDirectory",
-							vim.fs.joinpath(vim.uv.os_tmpdir(), "roslyn/logs"),
-							"--stdio",
-						},
-						filetypes = { "cs" },
-					})
-				end
+			local f = require("util.features")
+
+			if f.has("csharp") then
+				vim.lsp.config("roslyn", {
+					cmd = {
+						"roslyn",
+						"--logLevel",
+						"Information",
+						"--extensionLogDirectory",
+						vim.fs.joinpath(vim.uv.os_tmpdir(), "roslyn/logs"),
+						"--stdio",
+					},
+					filetypes = { "cs" },
+				})
 			end
 
-			if vim.g.project and vim.g.project.env and vim.g.project.env.type == "cpp" then
-				vim.lsp.config("clangd", {
+			if f.has("cpp") then
+				require("util.lsp").setup_clangd()
+			end
+
+			if f.has("cmake") then
+				vim.lsp.config("cmake_ls", {})
+				vim.lsp.enable("cmake_ls")
+			end
+
+			if f.has("go") then
+				vim.lsp.config("gopls", {})
+				vim.lsp.enable("gopls")
+			end
+
+			if f.has("dart") then
+				vim.lsp.config("dartls", {
 					cmd = {
-						"clangd",
-						"--background-index",
-						"--clang-tidy",
-						"--completion-style=detailed",
+						"dart",
+						"language-server",
+						"--protocol=lsp",
 					},
+					filetypes = { "dart" },
 					init_options = {
-						usePlaceholders = true,
-						completeUnimported = true,
-						clangdFileStatus = true,
+						onlyAnalyzeProjectsWithOpenFiles = false,
 					},
 				})
-				vim.lsp.enable("clangd")
+				vim.lsp.enable("dartls")
 			end
 		end,
 	},
