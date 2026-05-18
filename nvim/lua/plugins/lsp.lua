@@ -82,20 +82,6 @@ return {
 
 			local f = require("util.features")
 
-			if f.has("csharp") then
-				vim.lsp.config("roslyn", {
-					cmd = {
-						"roslyn",
-						"--logLevel",
-						"Information",
-						"--extensionLogDirectory",
-						vim.fs.joinpath(vim.uv.os_tmpdir(), "roslyn/logs"),
-						"--stdio",
-					},
-					filetypes = { "cs" },
-				})
-			end
-
 			if f.has("cpp") then
 				require("util.lsp").setup_clangd()
 			end
