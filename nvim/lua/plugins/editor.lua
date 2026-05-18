@@ -237,7 +237,9 @@ return {
 			local grep_args = { "--hidden" }
 
 			local file_patterns = {}
-			if not (vim.g.project and vim.g.project.env and vim.g.project.env.type == "csharp") then
+			local f = require("util.features")
+			local res = f.get_resolved()
+			if not (res and (res.csharp or res.unity)) then
 				file_patterns = { "*.meta", "*.asset" }
 			end
 			local dir_names = {}
