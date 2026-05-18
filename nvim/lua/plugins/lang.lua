@@ -3,8 +3,7 @@ return {
 		"seblj/roslyn.nvim",
 		ft = "cs",
 		config = function()
-			local project = vim.g.project
-			if not (project and project.env and project.env.type == "csharp") then
+			if not require("util.features").has("csharp") then
 				return
 			end
 			require("roslyn").setup({
@@ -39,13 +38,27 @@ return {
 			if not (project and project.features and project.features.format_on_save == true) then
 				return
 			end
+
+			local f = require("util.features")
+			local formatters_by_ft = {
+				lua = { "stylua" },
+			}
+			if f.has("csharp") then
+				formatters_by_ft.cs = { "csharpier" }
+			end
+			if f.has("cpp") then
+				formatters_by_ft.c = { "clang_format" }
+				formatters_by_ft.cpp = { "clang_format" }
+			end
+			if f.has("go") then
+				formatters_by_ft.go = { "gofumpt" }
+			end
+			if f.has("dart") then
+				formatters_by_ft.dart = { "dart_format" }
+			end
+
 			require("conform").setup({
-				formatters_by_ft = {
-					cs = { "csharpier" },
-					c = { "clang_format" },
-					cpp = { "clang_format" },
-					lua = { "stylua" },
-				},
+				formatters_by_ft = formatters_by_ft,
 				format_on_save = false,
 				default_format_opts = {
 					lsp_fallback = true,
