@@ -157,6 +157,15 @@ vim.api.nvim_create_autocmd("UIEnter", {
 	end,
 })
 
+vim.api.nvim_create_autocmd("VimLeavePre", {
+	once = true,
+	callback = function()
+		if require("util.features").has("cpp") then
+			require("util.session").lsp_stop("clangd", vim.fn.getcwd())
+		end
+	end,
+})
+
 vim.api.nvim_create_autocmd("VimLeave", {
 	once = true,
 	callback = function()
@@ -169,35 +178,22 @@ vim.api.nvim_create_autocmd("VimLeave", {
 
 vim.api.nvim_create_user_command("ProjectReload", function()
 	local project = require("util.project")
+	local features = require("util.features")
 	project.cache = {}
+	features.flush()
 	project.detect(vim.fn.getcwd())
 	project.ensure_lsp_servers()
 	project.ensure_dap_adapters()
 
-	if vim.g.project and vim.g.project.env and vim.g.project.env.type == "cpp" then
-		vim.lsp.config("clangd", {
-			cmd = {
-				"clangd",
-				"--background-index",
-				"--clang-tidy",
-				"--completion-style=detailed",
-			},
-			init_options = {
-				usePlaceholders = true,
-				completeUnimported = true,
-				clangdFileStatus = true,
-			},
-		})
-		vim.lsp.enable("clangd")
+	if features.has("cpp") then
+		require("util.lsp").setup_clangd()
 	end
 
-	if vim.g.project and vim.g.project.env then
-		if vim.g.project.env.type == "csharp" then
-			pcall(require("lazy.core.loader").reload, "roslyn.nvim")
-		end
-		if vim.g.project.env.type == "csharp" or vim.g.project.env.type == "cpp" then
-			pcall(require("lazy.core.loader").reload, "conform.nvim")
-		end
+	if features.has("csharp") then
+		pcall(require("lazy.core.loader").reload, "roslyn.nvim")
+	end
+	if features.has("csharp") or features.has("cpp") then
+		pcall(require("lazy.core.loader").reload, "conform.nvim")
 	end
 	pcall(require("lazy.core.loader").reload, "nvim-dap")
 	vim.notify("[project] Environment reloaded", vim.log.levels.INFO)
