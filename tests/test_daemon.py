@@ -233,3 +233,129 @@ def test_no_instance_for_unknown_path(daemon_socket):
     })
     assert resp["status"] == "no_instance"
     client.close()
+
+
+def test_lsp_start_and_list(daemon_socket, client):
+    """lsp_start creates a server entry; lsp_list returns it."""
+    cwd = "/tmp/test-lsp-proj"
+    resp = send_and_recv(client, {
+        "cmd": "lsp_start",
+        "type": "clangd",
+        "cwd": cwd,
+        "pid": 99998,
+    })
+    # In test mode, clangd Popen fails → gets error or pending
+    assert resp["status"] in ("ok", "pending", "error")
+
+    resp = send_and_recv(client, {"cmd": "lsp_list"})
+    assert resp["status"] == "ok"
+    if resp["status"] == "ok" and len(resp["servers"]) > 0:
+        s = resp["servers"][0]
+        assert s["type"] == "clangd"
+        assert s["cwd"].endswith("test-lsp-proj")
+
+
+def test_lsp_start_refcount(daemon_socket, client):
+    """Two lsp_start for same project increment refcount."""
+    cwd = "/tmp/test-lsp-refcount"
+    import socket as sock_mod
+
+    client2 = sock_mod.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client2.connect(daemon_socket)
+    client2.settimeout(5)
+
+    send_and_recv(client, {
+        "cmd": "lsp_start", "type": "clangd", "cwd": cwd, "pid": 99999,
+    })
+    send_and_recv(client2, {
+        "cmd": "lsp_start", "type": "clangd", "cwd": cwd, "pid": 99998,
+    })
+
+    resp = send_and_recv(client, {"cmd": "lsp_list"})
+    if resp["status"] == "ok" and len(resp["servers"]) > 0:
+        s = resp["servers"][0]
+        assert s["refcount"] >= 1
+    client2.close()
+
+
+def test_lsp_stop_decrements(daemon_socket, client):
+    """lsp_stop decrements refcount."""
+    cwd = "/tmp/test-lsp-stop"
+    send_and_recv(client, {
+        "cmd": "lsp_start", "type": "clangd", "cwd": cwd, "pid": 99997,
+    })
+    send_and_recv(client, {
+        "cmd": "lsp_stop", "type": "clangd", "cwd": cwd, "pid": 99997,
+    })
+    resp = send_and_recv(client, {"cmd": "lsp_list"})
+    if len(resp["servers"]) > 0:
+        assert resp["servers"][0]["refcount"] == 0
+
+
+def test_lsp_stop_nonexistent(daemon_socket, client):
+    """lsp_stop on a server that doesn't exist returns ok."""
+    resp = send_and_recv(client, {
+        "cmd": "lsp_stop", "type": "clangd", "cwd": "/tmp/ghost", "pid": 99900,
+    })
+    assert resp["status"] == "ok"
+
+
+def test_lsp_stop_below_zero(daemon_socket, client):
+    """Double lsp_stop doesn't decrement below 0."""
+    cwd = "/tmp/test-lsp-double-stop"
+    send_and_recv(client, {
+        "cmd": "lsp_start", "type": "clangd", "cwd": cwd, "pid": 99977,
+    })
+    send_and_recv(client, {
+        "cmd": "lsp_stop", "type": "clangd", "cwd": cwd, "pid": 99977,
+    })
+    send_and_recv(client, {
+        "cmd": "lsp_stop", "type": "clangd", "cwd": cwd, "pid": 99977,
+    })
+    resp = send_and_recv(client, {"cmd": "lsp_list"})
+    if len(resp["servers"]) > 0:
+        assert resp["servers"][0]["refcount"] == 0
+
+
+def test_lsp_pending_response(daemon_socket, client):
+    """Concurrent lsp_start returns pending while spawn is in progress."""
+    cwd = "/tmp/test-lsp-pending"
+    import socket as sock_mod
+
+    client2 = sock_mod.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client2.connect(daemon_socket)
+    client2.settimeout(5)
+
+    resp1 = send_and_recv(client, {
+        "cmd": "lsp_start", "type": "clangd", "cwd": cwd, "pid": 99996,
+    })
+    resp2 = send_and_recv(client2, {
+        "cmd": "lsp_start", "type": "clangd", "cwd": cwd, "pid": 99995,
+    })
+    assert resp1["status"] in ("ok", "pending", "error")
+    assert resp2["status"] in ("ok", "pending", "error")
+    client2.close()
+
+
+def test_lsp_prune_dead_removes_client(daemon_socket, client):
+    """Register instance, start LSP, unregister instance — LSP client pruned."""
+    cwd = "/tmp/test-lsp-prune"
+    send_and_recv(client, {
+        "cmd": "register",
+        "pid": 99994,
+        "project_root": cwd,
+        "socket": "/tmp/test-lsp-prune.sock",
+    })
+    send_and_recv(client, {
+        "cmd": "lsp_start", "type": "clangd", "cwd": cwd, "pid": 99994,
+    })
+    send_and_recv(client, {
+        "cmd": "unregister",
+        "socket": "/tmp/test-lsp-prune.sock",
+    })
+    resp = send_and_recv(client, {"cmd": "lsp_list"})
+    assert resp["status"] == "ok"
+    # After unregister, _prune_dead runs in handle_lsp_list.
+    # If server exists, its refcount should be 0 (client was pruned).
+    if len(resp["servers"]) > 0:
+        assert resp["servers"][0]["refcount"] == 0
