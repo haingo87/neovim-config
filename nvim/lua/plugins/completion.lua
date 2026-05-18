@@ -7,33 +7,6 @@ return {
 			require("luasnip.loaders.from_lua").lazy_load()
 		end,
 	},
-
-	{
-		"zbirenbaum/copilot.lua",
-		cmd = "Copilot",
-		event = "InsertEnter",
-		config = function()
-			require("copilot").setup({
-				suggestion = {
-					enabled = true,
-					auto_trigger = true,
-					keymap = {
-						accept = "<Tab>",
-						accept_word = false,
-						accept_line = false,
-						next = "<M-]>",
-						prev = "<M-[>",
-						dismiss = "<C-]>",
-					},
-				},
-				panel = { enabled = false },
-				filetypes = {
-					["*"] = true,
-				},
-			})
-		end,
-	},
-
 	{
 		"hrsh7th/nvim-cmp",
 		event = "InsertEnter",
@@ -65,20 +38,17 @@ return {
 					documentation = cmp.config.window.bordered(),
 				},
 				mapping = cmp.mapping.preset.insert({
-					["<Tab>"] = cmp.mapping(function(fallback)
-						local ok, copilot_suggestion = pcall(require, "copilot.suggestion")
-						if ok and copilot_suggestion.is_visible() then
-							copilot_suggestion.accept()
-						elseif cmp.visible() then
-							cmp.select_next_item()
-						elseif require("luasnip").expand_or_jumpable() then
-							require("luasnip").expand_or_jump()
-						elseif has_words_before() then
-							cmp.complete()
-						else
-							fallback()
-						end
-					end, { "i", "s" }),
+				["<Tab>"] = cmp.mapping(function(fallback)
+					if cmp.visible() then
+						cmp.select_next_item()
+					elseif require("luasnip").expand_or_jumpable() then
+						require("luasnip").expand_or_jump()
+					elseif has_words_before() then
+						cmp.complete()
+					else
+						fallback()
+					end
+				end, { "i", "s" }),
 
 					["<S-Tab>"] = cmp.mapping(function(fallback)
 						if require("luasnip").jumpable(-1) then
