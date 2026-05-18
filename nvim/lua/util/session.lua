@@ -73,7 +73,7 @@ function M.lsp_stop(server_type, cwd)
 		return
 	end
 	local msg = { cmd = "lsp_stop", type = server_type, cwd = cwd, pid = vim.fn.getpid() }
-	send_and_recv(msg)
+	send_and_recv(msg, 1)
 end
 
 return M

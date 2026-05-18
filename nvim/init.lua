@@ -161,7 +161,7 @@ vim.api.nvim_create_autocmd("VimLeavePre", {
 	once = true,
 	callback = function()
 		if require("util.features").has("cpp") then
-			require("util.session").lsp_stop("clangd", vim.fn.getcwd())
+			require("util.session").lsp_stop("clangd", vim.g.initial_cwd)
 		end
 	end,
 })
