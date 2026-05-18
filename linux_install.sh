@@ -9,6 +9,12 @@ if ! pacman -Q xdotool &>/dev/null; then
 	sudo pacman -S --noconfirm xdotool
 fi
 
+echo "Checking socat..."
+if ! pacman -Q socat &>/dev/null; then
+	echo "Installing socat..."
+	sudo pacman -S --noconfirm socat
+fi
+
 mkdir -p "$HOME/.local/bin"
 ln -sf "$SCRIPT_DIR/nvim-open" "$HOME/.local/bin/nvim-open"
 echo "LINKED: $HOME/.local/bin/nvim-open -> $SCRIPT_DIR/nvim-open"
