@@ -3,30 +3,53 @@
 
 -- Example: C# / Unity project
 return {
-	env = {
-		type = "csharp",   -- "csharp" | "cpp"
-	},
 	features = {
+		-- Language features (auto-enable LSP + formatter + DAP + treesitter)
+		csharp = true,       -- roslyn LSP, csharpier, netcoredbg
+		-- unity = true,     -- implies csharp, uses nvim-dap-unity
+
+		-- Feature toggles
 		debug = true,           -- nvim-dap + dap-ui + adapters
 		format_on_save = true,  -- conform.nvim auto-format on save
 	},
 	exclude = {
-		files = { "*.meta" },                        -- hide in telescope (rg-based filtering)
+		files = { "*.meta" },                        -- hide in telescope
 		dirs = { "Library", "Temp", "Build", "obj" }, -- hide in nvim-tree + telescope
 	},
 }
 
 -- Example: C++ / CMake project
 -- return {
--- 	env = {
--- 		type = "cpp",
--- 	},
 -- 	features = {
+-- 		cpp = true,          -- clangd LSP, clang-format, codelldb
+-- 		cmake = true,        -- cmake-language-server
 -- 		debug = true,
 -- 		format_on_save = true,
 -- 	},
 -- 	exclude = {
 -- 		files = {},
--- 		dirs = { "build", ".cache" }, -- hide in nvim-tree + telescope
+-- 		dirs = { "build", ".cache" },
+-- 	},
+-- }
+
+-- Example: Go project
+-- return {
+-- 	features = {
+-- 		go = true,           -- gopls LSP, gofumpt, delve
+-- 		debug = true,
+-- 		format_on_save = true,
+-- 	},
+-- }
+
+-- Example: Flutter / Dart project
+-- return {
+-- 	features = {
+-- 		flutter = true,      -- implies dart; flutter DAP
+-- 		debug = true,
+-- 		format_on_save = true,
+-- 	},
+-- 	exclude = {
+-- 		files = {},
+-- 		dirs = { "build", ".dart_tool" },
 -- 	},
 -- }
