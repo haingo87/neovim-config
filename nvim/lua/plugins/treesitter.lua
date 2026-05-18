@@ -18,13 +18,21 @@ return {
 				"bash",
 			}
 
-			if vim.g.project and vim.g.project.env then
-				local t = vim.g.project.env.type
-				if t == "csharp" then
-					vim.list_extend(ensure_installed, { "c_sharp" })
-				elseif t == "cpp" then
-					vim.list_extend(ensure_installed, { "c", "cpp" })
-				end
+			local f = require("util.features")
+			if f.has("csharp") then
+				vim.list_extend(ensure_installed, { "c_sharp" })
+			end
+			if f.has("cpp") then
+				vim.list_extend(ensure_installed, { "c", "cpp" })
+			end
+			if f.has("cmake") then
+				vim.list_extend(ensure_installed, { "cmake" })
+			end
+			if f.has("go") then
+				vim.list_extend(ensure_installed, { "go" })
+			end
+			if f.has("dart") then
+				vim.list_extend(ensure_installed, { "dart" })
 			end
 
 			require("nvim-treesitter").setup({
