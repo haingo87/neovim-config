@@ -47,4 +47,33 @@ function M.unregister(socket_path)
 	send_and_recv(msg, 1)
 end
 
+function M.lsp_start(server_type, cwd)
+	if not vim.g.daemon_registered then
+		return nil
+	end
+	local msg = { cmd = "lsp_start", type = server_type, cwd = cwd, pid = vim.fn.getpid() }
+	for _ = 1, 10 do
+		local resp = send_and_recv(msg)
+		if not resp then
+			return nil
+		end
+		if resp.socket_path then
+			return resp.socket_path
+		end
+		if resp.status ~= "pending" then
+			return nil
+		end
+		vim.wait(500, function() end, false)
+	end
+	return nil
+end
+
+function M.lsp_stop(server_type, cwd)
+	if not vim.g.daemon_registered then
+		return
+	end
+	local msg = { cmd = "lsp_stop", type = server_type, cwd = cwd, pid = vim.fn.getpid() }
+	send_and_recv(msg)
+end
+
 return M
