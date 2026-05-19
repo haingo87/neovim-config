@@ -29,9 +29,19 @@ return {
 			local dap = require("dap")
 
 			local vscode = require("dap.ext.vscode")
-			local orig_getconfigs = vscode.getconfigs
 			vscode.getconfigs = function(path)
-				local ok, result = pcall(orig_getconfigs, path)
+				local resolved_path = path or (vim.fn.getcwd() .. '/.vscode/launch.json')
+				if not vim.loop.fs_stat(resolved_path) then
+					return {}
+				end
+				local fp = io.open(resolved_path, "r")
+				if not fp then
+					return {}
+				end
+				local contents = fp:read("*a")
+				fp:close()
+				contents = contents:gsub("^\xEF\xBB\xBF", "")
+				local ok, result = pcall(vscode._load_json, contents)
 				if ok then return result end
 				return {}
 			end
@@ -40,7 +50,7 @@ return {
 				local unity_ok = pcall(require, "nvim-dap-unity")
 				if unity_ok then
 					require("nvim-dap-unity").setup({
-						auto_install_on_start = false,
+						auto_install_on_start = true,
 					})
 				end
 			end
