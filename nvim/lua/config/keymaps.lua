@@ -26,6 +26,12 @@ map("i", "<A-Up>", "<Esc>:move -2<CR>==gi", { desc = "Move line up" })
 map("n", "<C-S-k>", "<cmd>delete<CR>", { desc = "Delete line" })
 map("i", "<C-S-k>", "<C-o>dd", { desc = "Delete line" })
 
+--- Display-line navigation (wrap-friendly) ---
+map("n", "<Down>", "gj", { desc = "Down (display line)" })
+map("n", "<Up>", "gk", { desc = "Up (display line)" })
+map("i", "<Down>", "<C-o>gj", { desc = "Down (display line)" })
+map("i", "<Up>", "<C-o>gk", { desc = "Up (display line)" })
+
 --- Window / Split Management ---
 
 map("n", "<leader>t", "<cmd>Terminal<CR>", { desc = "Open terminal" })
