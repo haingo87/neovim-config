@@ -8,6 +8,7 @@ local feature_map = {
 	go     = { implies = {} },
 	dart   = { implies = {} },
 	flutter= { implies = { "dart" } },
+	lua    = { implies = {} },
 }
 
 M.cache = {}

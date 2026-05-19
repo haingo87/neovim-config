@@ -43,9 +43,12 @@ function M.detect(cwd)
 end
 
 function M.ensure_lsp_servers()
-	local base = { "lua_ls", "jsonls", "yamlls", "marksman" }
+	local base = { "jsonls", "yamlls", "marksman" }
 	local servers = vim.deepcopy(base)
 
+	if features.has("lua") then
+		table.insert(servers, "lua_ls")
+	end
 	if features.has("csharp") then
 		local ok, registry = pcall(require, "mason-registry")
 		if ok and not registry.is_installed("roslyn") then
