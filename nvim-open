@@ -493,6 +493,20 @@ def _find_nvim_tab_atspi(project_dirname=None, filepath=None):
         return -1
 
 
+def _focus_orphan(socket_path, verbose=False):
+    """Bring the orphan Neovim instance to front without opening a file."""
+    if not os.path.exists(socket_path):
+        return False
+    env = _nvim_env()
+    subprocess.Popen(
+        ["nvim", "--server", socket_path, "--remote-expr",
+         "v:lua.require('util.redirect').bring_to_front()"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, env=env,
+    )
+    return True
+
+
 def _launch_orphan(filepath, verbose=False):
     os.makedirs(SOCKETS_DIR, exist_ok=True)
     if os.path.exists(ORPHAN_SOCKET):
@@ -502,10 +516,11 @@ def _launch_orphan(filepath, verbose=False):
     cmd = [
         "nvim", "--listen", ORPHAN_SOCKET,
         "--cmd", "lua vim.g.neovim_orphan_group=true",
-        filepath,
     ]
+    if filepath:
+        cmd.append(filepath)
     if verbose:
-        print(f"Launching orphan with {filepath}", file=sys.stderr)
+        print(f"Launching orphan with {filepath or 'no file'}", file=sys.stderr)
     if sys.stdin.isatty():
         os.execvpe(cmd[0], cmd, env)
     else:
@@ -584,7 +599,16 @@ def main():
         sys.exit(0)
 
     if not args.file:
-        sys.exit("nvim-open: file argument required (use --list to view instances)")
+        sock = _connect_daemon(args.verbose)
+        if sock:
+            resp = _send_recv(sock, {"cmd": "list"}, args.verbose)
+            sock.close()
+            for inst in resp.get("instances", []):
+                if inst.get("orphan"):
+                    _focus_orphan(inst["socket"], args.verbose)
+                    sys.exit(0)
+        _launch_orphan(None, args.verbose)
+        sys.exit(0)
 
     filepath, parsed_line, parsed_col = _parse_path_with_line(args.file)
     line = args.line or parsed_line

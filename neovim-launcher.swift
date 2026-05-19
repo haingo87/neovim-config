@@ -3,7 +3,7 @@ import Cocoa
 class AppDelegate: NSObject, NSApplicationDelegate {
 	let nvimOpenPath: String
 	var cooldownTimer: Timer?
-	var fallbackTimer: Timer?
+	var receivedAppleEvent = false
 
 	override init() {
 		let bundleDir = Bundle.main.bundleURL.resolvingSymlinksInPath()
@@ -26,37 +26,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 			for path in args { launchNvim(path) }
 			return
 		}
-		fallbackTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-			NSApplication.shared.terminate(nil)
+		// Let Apple Events arrive first, then handle "no file" case
+		DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+			guard let self, !self.receivedAppleEvent else { return }
+			self.launchNvim(nil)
 		}
 	}
 
 	func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+		receivedAppleEvent = true
 		launchNvim(filename)
 		return true
 	}
 
 	func application(_ sender: NSApplication, openFiles filenames: [String]) {
+		receivedAppleEvent = true
 		for path in filenames { launchNvim(path) }
 	}
 
-	func launchNvim(_ file: String) {
+	func launchNvim(_ file: String?) {
 		let task = Process()
 		task.executableURL = URL(fileURLWithPath: nvimOpenPath)
-		task.arguments = [file]
+		task.arguments = file != nil ? [file!] : []
 
 		var env = ProcessInfo.processInfo.environment
 		env["PATH"] = resolvePath()
 		task.environment = env
 
-		do { try task.run() } catch {}
-
-		fallbackTimer?.invalidate()
-		fallbackTimer = nil
 		cooldownTimer?.invalidate()
-		cooldownTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-			NSApplication.shared.terminate(nil)
+		cooldownTimer = nil
+
+		task.terminationHandler = { proc in
+			DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+				NSApplication.shared.terminate(nil)
+			}
 		}
+
+		do { try task.run() } catch { NSApplication.shared.terminate(nil) }
 	}
 }
 
