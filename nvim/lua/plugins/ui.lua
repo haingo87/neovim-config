@@ -107,4 +107,16 @@ return {
 			})
 		end,
 	},
+
+	{
+		"dstein64/nvim-scrollview",
+		event = "VeryLazy",
+		config = function()
+			require("scrollview").setup({
+				current_only = true,
+				diagnostics_severities = {},
+				git_symbol = "",
+			})
+		end,
+	},
 }
