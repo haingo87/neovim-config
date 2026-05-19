@@ -42,3 +42,12 @@ map("n", "<leader>fg", "<cmd>Telescope live_grep<CR>", { desc = "Live grep" })
 map("n", "<leader>fb", "<cmd>Telescope buffers<CR>", { desc = "Find buffers" })
 map("n", "<leader>fh", "<cmd>Telescope help_tags<CR>", { desc = "Help tags" })
 map("n", "<leader>fs", "<cmd>Telescope lsp_document_symbols<CR>", { desc = "Document symbols" })
+
+--- Utility Commands ---
+vim.api.nvim_create_user_command("Totabs", function()
+	local et = vim.bo.expandtab
+	vim.bo.expandtab = false
+	vim.cmd("retab!")
+	vim.bo.expandtab = et
+	vim.notify("retab! done", vim.log.levels.INFO)
+end, { desc = "Convert spaces to tabs respecting tabstop" })

@@ -1,10 +1,6 @@
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
-vim.opt.expandtab = false
-vim.opt.tabstop = 4
-vim.opt.shiftwidth = 4
-
 if vim.g.neovim_orphan_group == nil then
 	vim.g.neovim_orphan_group = vim.fn.getenv("NVIM_ORPHAN_GROUP") == "1"
 end
