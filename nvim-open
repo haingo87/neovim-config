@@ -121,12 +121,140 @@ def _detect_terminal():
     return None
 
 
+# --- macOS terminal support ---
+
+def _escape_applescript(s):
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _detect_macos_terminal():
+    """Detect the user's terminal on macOS.
+
+    Checks TERMINAL env var first (user preference),
+    then queries running apps, then falls back to Terminal.app.
+    """
+    term = os.environ.get("TERMINAL", "").lower()
+    if term in ("ghostty", "iterm2", "terminal"):
+        return term
+
+    try:
+        r = subprocess.run(
+            ["osascript", "-e",
+             'tell application "System Events" to get name of every process'],
+            capture_output=True, text=True, timeout=3,
+        )
+        running = {n.strip().lower() for n in r.stdout.split(",")}
+        if "ghostty" in running:
+            return "ghostty"
+        if "iterm2" in running:
+            return "iterm2"
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+
+    if shutil.which("ghostty"):
+        return "ghostty"
+
+    return "terminal"
+
+
+def _ghostty_macos(cmd_args, cwd=None, verbose=False):
+    env = os.environ.copy()
+    env.pop("NVIM", None)
+    env_path = env.get("PATH", "")
+
+    shell_cmd = "env PATH=" + shlex.quote(env_path) + " " + shlex.join(cmd_args)
+    esc_cmd = _escape_applescript(shell_cmd)
+
+    script = (
+        'tell application "Ghostty"\n'
+        '    set cfg to new surface configuration\n'
+        f'    set command of cfg to "{esc_cmd}"\n'
+    )
+    if cwd:
+        script += f'    set initial working directory of cfg to "{_escape_applescript(cwd)}"\n'
+    script += (
+        '    try\n'
+        '        new tab in front window with configuration cfg\n'
+        '    on error\n'
+        '        new window with configuration cfg\n'
+        '    end try\n'
+        '    activate\n'
+        'end tell'
+    )
+
+    if verbose:
+        print(f"Running: osascript Ghostty → {shell_cmd}", file=sys.stderr)
+    subprocess.Popen(["osascript", "-e", script], env=env, start_new_session=True)
+
+
+def _iterm2_macos(cmd_args, cwd=None, verbose=False):
+    env = os.environ.copy()
+    env.pop("NVIM", None)
+    env_path = env.get("PATH", "")
+
+    shell_cmd = "env PATH=" + shlex.quote(env_path) + " " + shlex.join(cmd_args)
+    esc_cmd = _escape_applescript(shell_cmd)
+
+    script = (
+        'tell application "iTerm2"\n'
+        '    activate\n'
+        f'    tell current window\n'
+        f'        create tab with default profile command "{esc_cmd}"\n'
+        '    end tell\n'
+        'end tell'
+    )
+
+    if verbose:
+        print(f"Running: osascript iTerm2 → {shell_cmd}", file=sys.stderr)
+    subprocess.Popen(["osascript", "-e", script], env=env, start_new_session=True)
+
+
+def _terminal_app_macos(cmd_args, cwd=None, verbose=False):
+    env = os.environ.copy()
+    env.pop("NVIM", None)
+    env_path = env.get("PATH", "")
+
+    shell_cmd = "env PATH=" + shlex.quote(env_path) + " " + shlex.join(cmd_args)
+    esc_cmd = _escape_applescript(shell_cmd)
+
+    script = (
+        'tell application "Terminal"\n'
+        '    activate\n'
+        '    try\n'
+        f'        do script "{esc_cmd}" in front window\n'
+        '    on error\n'
+        f'        do script "{esc_cmd}"\n'
+        '    end try\n'
+        'end tell'
+    )
+
+    if verbose:
+        print(f"Running: osascript Terminal → {shell_cmd}", file=sys.stderr)
+    subprocess.Popen(["osascript", "-e", script], env=env, start_new_session=True)
+
+
+def _spawn_macos_terminal(cmd_args, cwd=None, verbose=False):
+    terminal = _detect_macos_terminal()
+    if terminal == "ghostty":
+        _ghostty_macos(cmd_args, cwd, verbose)
+    elif terminal == "iterm2":
+        _iterm2_macos(cmd_args, cwd, verbose)
+    else:
+        _terminal_app_macos(cmd_args, cwd, verbose)
+
+
+# --- Linux terminal support ---
+
 def _spawn_terminal_tab(cmd_args, cwd=None, verbose=False):
     """Spawn a command in a new terminal tab (or window if tabs unsupported).
 
     Detects the running terminal and uses its native tab-creation method.
     Falls back to xterm -e if unknown terminal or detection fails.
     """
+    if sys.platform == "darwin":
+        _spawn_macos_terminal(cmd_args, cwd, verbose)
+        return
+
     terminal = _detect_terminal()
     if verbose:
         name = terminal or "xterm (fallback)"

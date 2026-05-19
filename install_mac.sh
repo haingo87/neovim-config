@@ -27,3 +27,13 @@ link "$REPO_DIR/ghostty" "$HOME/.config/ghostty"
 link "$REPO_DIR/nvim" "$HOME/.config/nvim"
 link "$REPO_DIR/nvim-open" "/usr/local/bin/nv"
 link "$REPO_DIR/nvim-daemon" "/usr/local/bin/nvim-daemon"
+link "$REPO_DIR/Neovim.app" "/Applications/Neovim.app"
+
+# Compile the native macOS launcher (handles Apple Events from Finder/Unity)
+if command -v swiftc &>/dev/null; then
+	echo "Building Neovim.app native launcher..."
+	swiftc -o "$REPO_DIR/Neovim.app/Contents/MacOS/neovim" "$REPO_DIR/neovim-launcher.swift" -framework Cocoa
+	echo "OK: Neovim.app launcher built"
+else
+	echo "WARN: swiftc not found. Install Xcode Command Line Tools: xcode-select --install"
+fi
