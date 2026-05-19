@@ -1,6 +1,12 @@
 -- Copy this file to your project root and rename to `.nvproj`
 -- Remove or comment out sections you don't need
 
+-- Copy this file to your project root and rename to `.nvproj`
+-- Features enabled by default (set to false to disable):
+--   debug, format_on_save
+--
+-- Features must be explicitly enabled: csharp, unity, cpp, cmake, go, flutter, lua
+
 -- Example: C# / Unity project
 return {
 	features = {
@@ -8,9 +14,8 @@ return {
 		csharp = true,       -- roslyn LSP, csharpier, netcoredbg
 		-- unity = true,     -- implies csharp, uses nvim-dap-unity
 
-		-- Feature toggles
-		debug = true,           -- nvim-dap + dap-ui + adapters
-		format_on_save = true,  -- conform.nvim auto-format on save
+		-- Feature toggles (optional — on by default)
+		-- format_on_save = true,  -- conform.nvim auto-format on save
 	},
 	exclude = {
 		files = { "*.meta" },                        -- hide in telescope
@@ -23,8 +28,6 @@ return {
 -- 	features = {
 -- 		cpp = true,          -- clangd LSP, clang-format, codelldb
 -- 		cmake = true,        -- cmake-language-server
--- 		debug = true,
--- 		format_on_save = true,
 -- 	},
 -- 	exclude = {
 -- 		files = {},
@@ -36,8 +39,6 @@ return {
 -- return {
 -- 	features = {
 -- 		go = true,           -- gopls LSP, gofumpt, delve
--- 		debug = true,
--- 		format_on_save = true,
 -- 	},
 -- }
 
@@ -45,11 +46,17 @@ return {
 -- return {
 -- 	features = {
 -- 		flutter = true,      -- implies dart; flutter DAP
--- 		debug = true,
--- 		format_on_save = true,
 -- 	},
 -- 	exclude = {
 -- 		files = {},
 -- 		dirs = { "build", ".dart_tool" },
+-- 	},
+-- }
+
+-- Example: Minimal (debug turned off for lightweight setup)
+-- return {
+-- 	features = {
+-- 		debug = false,
+-- 		format_on_save = false,
 -- 	},
 -- }

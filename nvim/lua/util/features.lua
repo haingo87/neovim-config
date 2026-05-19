@@ -9,6 +9,12 @@ local feature_map = {
 	dart   = { implies = {} },
 	flutter= { implies = { "dart" } },
 	lua    = { implies = {} },
+	debug  = { implies = {} },
+	format_on_save = { implies = {} },
+}
+
+local defaults = {
+	"debug",
 }
 
 M.cache = {}
@@ -28,9 +34,15 @@ local function resolve_features(cfg)
 		end
 	end
 
+	for _, name in ipairs(defaults) do
+		add(name)
+	end
+
 	for name, enabled in pairs(features) do
 		if enabled then
 			add(name)
+		else
+			resolved[name] = nil
 		end
 	end
 

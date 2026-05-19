@@ -1,17 +1,19 @@
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
+vim.opt.expandtab = false
+vim.opt.tabstop = 4
+vim.opt.shiftwidth = 4
+
 if vim.g.neovim_orphan_group == nil then
 	vim.g.neovim_orphan_group = vim.fn.getenv("NVIM_ORPHAN_GROUP") == "1"
 end
 
-local has_dir_arg = false
 local project_dir = nil
 
 for i = 2, #vim.v.argv do
 	local arg = vim.v.argv[i]
 	if type(arg) == "string" and vim.fn.isdirectory(arg) == 1 then
-		has_dir_arg = true
 		project_dir = vim.fn.fnamemodify(arg, ":p"):gsub("/$", "")
 		break
 	end
