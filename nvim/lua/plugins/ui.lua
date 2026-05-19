@@ -40,7 +40,17 @@ return {
 					lualine_b = { "branch" },
 					lualine_c = { "filename" },
 					lualine_x = { "diagnostics" },
-					lualine_y = { "filetype" },
+					lualine_y = {
+						{
+							function()
+								local enc = vim.bo.fileencoding and vim.bo.fileencoding:upper()
+								if not enc or enc == "" then return "" end
+								return vim.bo.bomb and enc .. "+BOM" or enc
+							end,
+							padding = 1,
+						},
+						"filetype",
+					},
 					lualine_z = { "location" },
 				},
 			})
