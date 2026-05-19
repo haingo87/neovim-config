@@ -16,8 +16,8 @@ if ! pacman -Q socat &>/dev/null; then
 fi
 
 mkdir -p "$HOME/.local/bin"
-ln -sf "$SCRIPT_DIR/nvim-open" "$HOME/.local/bin/nvim-open"
-echo "LINKED: $HOME/.local/bin/nvim-open -> $SCRIPT_DIR/nvim-open"
+ln -sf "$SCRIPT_DIR/nvim-open" "$HOME/.local/bin/nv"
+echo "LINKED: $HOME/.local/bin/nv -> $SCRIPT_DIR/nvim-open"
 ln -sf "$SCRIPT_DIR/nvim-daemon" "$HOME/.local/bin/nvim-daemon"
 echo "LINKED: $HOME/.local/bin/nvim-daemon -> $SCRIPT_DIR/nvim-daemon"
 

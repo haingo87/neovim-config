@@ -18,9 +18,12 @@ link() {
 		mv "$target" "$backup"
 	fi
 
+	mkdir -p "$(dirname "$target")"
 	ln -sf "$src" "$target"
 	echo "LINKED: $target -> $src"
 }
 
 link "$REPO_DIR/ghostty" "$HOME/.config/ghostty"
 link "$REPO_DIR/nvim" "$HOME/.config/nvim"
+link "$REPO_DIR/nvim-open" "/usr/local/bin/nv"
+link "$REPO_DIR/nvim-daemon" "/usr/local/bin/nvim-daemon"
