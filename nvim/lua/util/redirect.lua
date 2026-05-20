@@ -32,8 +32,6 @@ end
 function M._macos_focus()
 	local proj = vim.g.project_dirname
 
-	-- Try to find the right terminal by searching working directory or name for project dirname.
-	-- Dup instances don't have macos_terminal_app set, so try both Terminal.app and Ghostty.
 	if proj then
 		local function try_focus(app_name, is_ghostty)
 			local script
@@ -77,13 +75,11 @@ function M._macos_focus()
 		elseif app == "Terminal" then
 			if try_focus("Terminal", false) then return end
 		else
-			-- Unknown or nil — try both
 			if try_focus("Ghostty", true) then return end
 			if try_focus("Terminal", false) then return end
 		end
 	end
 
-	-- Fallback: activate cached window
 	local win_id = vim.g.macos_window_id
 	local app = vim.g.macos_terminal_app
 	if win_id and app then
@@ -97,7 +93,6 @@ function M._macos_focus()
 		return
 	end
 
-	-- Fallback: activate by process name
 	local terminal = vim.env.TERM_PROGRAM
 	local process_name = "Terminal"
 	if terminal == "iTerm.app" then

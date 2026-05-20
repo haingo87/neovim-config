@@ -105,7 +105,7 @@ class Daemon:
         self.log = logging.getLogger("nvim-daemon")
 
     def _prune_dead(self):
-        """Remove entries whose PID is no longer alive or is not a nvim process."""
+        """Remove entries whose PID is no longer alive, is not a nvim process, or whose socket is gone."""
         alive = []
         for inst in self.instances:
             if inst.pid <= 0:
@@ -122,6 +122,9 @@ class Daemon:
                 ).stdout.strip()
                 if "nvim" not in comm:
                     self.log.info("Pruning non-nvim instance pid=%d comm=%s root=%s", inst.pid, comm, inst.project_root)
+                    continue
+                if not os.path.exists(inst.socket):
+                    self.log.info("Pruning instance with missing socket pid=%d socket=%s root=%s", inst.pid, inst.socket, inst.project_root)
                     continue
                 alive.append(inst)
             except (ProcessLookupError, FileNotFoundError):

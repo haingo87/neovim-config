@@ -319,7 +319,10 @@ def _connect_daemon(verbose=False):
 
 
 def _start_daemon(verbose=False):
-    """Start the daemon process."""
+    """Start the daemon process and wait for it to accept connections.
+
+    Returns True if the daemon socket is ready, False otherwise.
+    """
     env = os.environ.copy()
     env.pop("NVIM", None)
     subprocess.Popen(
@@ -331,8 +334,16 @@ def _start_daemon(verbose=False):
     )
     for _ in range(50):
         if os.path.exists(DAEMON_SOCKET):
-            return
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.settimeout(1)
+                s.connect(DAEMON_SOCKET)
+                s.close()
+                return True
+            except (ConnectionRefusedError, socket.timeout, OSError):
+                pass
         time.sleep(0.1)
+    return False
 
 
 def _send_recv(sock, msg, verbose=False):
@@ -404,7 +415,35 @@ def _nvim_remote(socket_path, filepath, line=None, col=None, verbose=False):
 def _activate_window(socket_path, filepath, env):
     """Detached script that reads focus info and activates the window."""
     code = (
-        "import subprocess, json, os, shutil, sys\n"
+        "import subprocess, json, os, shutil, sys, time\n"
+        "def _find_tabs(root):\n"
+        "  import pyatspi\n"
+        "  try:\n"
+        "    if root.getRole() == pyatspi.ROLE_PAGE_TAB_LIST:\n"
+        "      return root\n"
+        "  except:\n"
+        "    pass\n"
+        "  for i in range(root.childCount):\n"
+        "    try:\n"
+        "      r = _find_tabs(root[i])\n"
+        "      if r: return r\n"
+        "    except:\n"
+        "      pass\n"
+        "  return None\n"
+        "def _tab_index(proj):\n"
+        "  from pyatspi import Registry\n"
+        "  desktop = Registry.getDesktop(0)\n"
+        "  for app in desktop:\n"
+        "    if app.name and 'terminal' in app.name.lower():\n"
+        "      for win in app:\n"
+        "        if win.getRoleName() != 'frame': continue\n"
+        "        tl = _find_tabs(win)\n"
+        "        if tl is None: continue\n"
+        "        for ti in range(tl.childCount):\n"
+        "          tab = tl[ti]\n"
+        "          if proj and (tab.name.startswith(proj + ' - ') or tab.name.startswith(proj + ' | ') or tab.name == proj):\n"
+        "            return ti\n"
+        "  return -1\n"
         "try:\n"
         "  r = subprocess.run(\n"
         f"    ['nvim', '--server', {json.dumps(socket_path)},\n"
@@ -413,10 +452,20 @@ def _activate_window(socket_path, filepath, env):
         "    capture_output=True, text=True, timeout=5, env=os.environ)\n"
         "  if r.returncode != 0 or not r.stdout.strip(): sys.exit(0)\n"
         "  info = r.stdout.strip()\n"
-        "  wid, _ = info.split(':', 1) if ':' in info else (info, None)\n"
+        "  wid, proj = info.split(':', 1) if ':' in info else (info, None)\n"
+        "  if proj is None:\n"
+        "    proj = os.path.basename(" + json.dumps(filepath) + ")\n"
         "  if not shutil.which('xdotool'): sys.exit(0)\n"
-        "  subprocess.run(['xdotool', 'windowactivate', wid],\n"
-        "    capture_output=True, timeout=5)\n"
+        "  if wid:\n"
+        "    subprocess.run(['xdotool', 'windowactivate', wid],\n"
+        "      capture_output=True, timeout=5)\n"
+        "    time.sleep(0.15)\n"
+        "  ti = _tab_index(proj)\n"
+        "  if ti >= 0:\n"
+        "    key = f'alt+{ti + 1}' if ti < 9 else 'alt+0'\n"
+        "    subprocess.run(['xdotool', 'key', key],\n"
+        "      capture_output=True, timeout=5)\n"
+        "    time.sleep(0.3)\n"
         "except Exception:\n"
         "  pass\n"
     )
@@ -426,71 +475,6 @@ def _activate_window(socket_path, filepath, env):
         env=env,
         start_new_session=True,
     )
-
-
-def _find_atspi_tab_list(root):
-    """Recursively find the first ROLE_PAGE_TAB_LIST child in the AT-SPI tree."""
-    import pyatspi
-    try:
-        if root.getRole() == pyatspi.ROLE_PAGE_TAB_LIST:
-            return root
-    except Exception:
-        pass
-    for i in range(root.childCount):
-        try:
-            result = _find_atspi_tab_list(root[i])
-            if result is not None:
-                return result
-        except Exception:
-            pass
-    return None
-
-
-def _find_nvim_tab_atspi(project_dirname=None, filepath=None):
-    """Find nvim's tab index via AT-SPI2 tab name matching.
-
-    Returns 0-based tab index, or -1 if not found / pyatspi unavailable.
-    """
-    try:
-        import pyatspi
-    except ImportError:
-        return -1
-
-    try:
-        desktop = pyatspi.Registry.getDesktop(0)
-        xfce_app = next((a for a in desktop if a.name == "xfce4-terminal"), None)
-        if xfce_app is None:
-            return -1
-
-        for win in xfce_app:
-            if win.getRoleName() != "frame":
-                continue
-            tab_list = _find_atspi_tab_list(win)
-            if tab_list is None:
-                continue
-
-            for ti in range(tab_list.childCount):
-                tab = tab_list[ti]
-                if project_dirname:
-                    candidates = [
-                        tab.name.startswith(project_dirname + " - "),
-                        tab.name.startswith(project_dirname + " | "),
-                        tab.name == project_dirname,
-                    ]
-                    match = any(candidates)
-                elif filepath:
-                    fname = os.path.basename(filepath)
-                    match = tab.name == fname
-                else:
-                    match = False
-
-                if match:
-                    return ti
-
-        return -1
-
-    except Exception:
-        return -1
 
 
 def _focus_orphan(socket_path, verbose=False):
@@ -559,7 +543,7 @@ def _launch_project_with_file(dirpath, filepath, line, col, verbose=False):
             "vim.cmd('silent! e ' .. f); "
             "vim.cmd('" + pos_cmd + " | wincmd w | wincmd w')"
         )
-        cmd = ["nvim", dirpath, "-c", lua_cmd]
+        cmd = ["nvim", dirpath, filepath, "-c", lua_cmd]
         if verbose:
             print(f"Launching: {' '.join(cmd)}", file=sys.stderr)
         env = _nvim_env()
@@ -751,14 +735,27 @@ def main():
 
     if resp["status"] == "routed":
         target_socket = resp["socket"]
+        if args.verbose:
+            print(f"[nv] Routed -> socket={target_socket}", file=sys.stderr)
         if not _nvim_remote(target_socket, filepath, line, col, args.verbose):
             if args.verbose:
-                print(f"Warning: could not send {filepath} to {target_socket}, file may not exist", file=sys.stderr)
+                print(f"[nv] Warning: socket {target_socket} unreachable, falling back to launch", file=sys.stderr)
+            if project_dir:
+                _launch_project_with_file(project_dir, filepath, line, col, args.verbose)
+            else:
+                _launch_orphan(filepath, args.verbose)
+        elif args.verbose:
+            print(f"[nv] Remote sent successfully, exiting", file=sys.stderr)
     elif resp["status"] == "no_instance":
+        if args.verbose:
+            print(f"[nv] No instance found, launching new", file=sys.stderr)
         if project_dir:
             _launch_project_with_file(project_dir, filepath, line, col, args.verbose)
         else:
             _launch_orphan(filepath, args.verbose)
+
+    if args.verbose:
+        print(f"[nv] main() end reached (status={resp.get('status')})", file=sys.stderr)
 
 
 if __name__ == "__main__":
