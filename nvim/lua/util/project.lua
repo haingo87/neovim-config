@@ -66,12 +66,8 @@ function M.ensure_lsp_servers()
 	if features.has("go") then
 		table.insert(servers, "gopls")
 	end
-	if features.has("dart") then
-		table.insert(servers, "dartls")
-	end
-
-	-- Verify Mason package names match mason-lspconfig's mapping:
-	-- cmake_ls, gopls, dartls must exist in Mason registry
+	-- dartls is a system LSP (Dart SDK) — not a Mason package, so it's not
+	-- added to ensure_installed here. It is configured in lsp.lua instead.
 	local status, mason_lspconfig = pcall(require, "mason-lspconfig")
 	if status then
 		mason_lspconfig.setup({
