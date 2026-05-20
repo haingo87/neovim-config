@@ -23,31 +23,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 	func applicationDidFinishLaunching(_ notification: Notification) {
 		let args = Array(CommandLine.arguments.dropFirst())
 		if !args.isEmpty {
-			for path in args { launchNvim(path) }
+			launchNvim(withArgs: args)
 			return
 		}
 		// Let Apple Events arrive first, then handle "no file" case
 		DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
 			guard let self, !self.receivedAppleEvent else { return }
-			self.launchNvim(nil)
+			self.launchNvim(withArgs: [])
 		}
 	}
 
 	func application(_ sender: NSApplication, openFile filename: String) -> Bool {
 		receivedAppleEvent = true
-		launchNvim(filename)
+		launchNvim(withArgs: [filename])
 		return true
 	}
 
 	func application(_ sender: NSApplication, openFiles filenames: [String]) {
 		receivedAppleEvent = true
-		for path in filenames { launchNvim(path) }
+		for path in filenames { launchNvim(withArgs: [path]) }
 	}
 
-	func launchNvim(_ file: String?) {
+	func launchNvim(withArgs args: [String]) {
 		let task = Process()
 		task.executableURL = URL(fileURLWithPath: nvimOpenPath)
-		task.arguments = file != nil ? [file!] : []
+		task.arguments = args
 
 		var env = ProcessInfo.processInfo.environment
 		env["PATH"] = resolvePath()
