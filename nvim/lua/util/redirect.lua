@@ -32,12 +32,12 @@ end
 function M._macos_focus()
 	local proj = vim.g.project_dirname
 
-	-- Try to find the right tab by searching terminal tab titles for project dirname
+	-- Try to find the right tab by searching terminal tab titles for project dirname.
+	-- Dup instances don't have macos_terminal_app set, so try both Terminal.app and Ghostty.
 	if proj then
-		local script
-		local app = vim.g.macos_terminal_app
-		if app == "Ghostty" or app == "Terminal" then
-			if app == "Ghostty" then
+		local function try_focus(app_name, is_ghostty)
+			local script
+			if is_ghostty then
 				script = ('tell application "Ghostty"\n'
 					.. 'set projName to "%s"\n'
 					.. 'repeat with w in windows\n'
@@ -67,9 +67,18 @@ function M._macos_focus()
 					.. 'end repeat\n'
 					.. 'end tell'):format(proj)
 			end
-			if vim.fn.system({ "osascript", "-e", script }) == "" then
-				return
-			end
+			return vim.fn.system({ "osascript", "-e", script }) == ""
+		end
+
+		local app = vim.g.macos_terminal_app
+		if app == "Ghostty" then
+			if try_focus("Ghostty", true) then return end
+		elseif app == "Terminal" then
+			if try_focus("Terminal", false) then return end
+		else
+			-- Unknown or nil — try both
+			if try_focus("Ghostty", true) then return end
+			if try_focus("Terminal", false) then return end
 		end
 	end
 
