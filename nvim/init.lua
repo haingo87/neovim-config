@@ -100,8 +100,53 @@ if not already_listening then
 	end
 end
 
-local should_register = not vim.g.neovim_orphan_group
 vim.g.daemon_registered = false
+
+-- Register with daemon immediately, before lazy.nvim loads.
+-- This avoids a race where file opens arrive during plugin setup
+-- (which can take seconds) and the daemon doesn't know about this instance.
+-- Only attempt if daemon socket exists (nvim was launched via nvim-open),
+-- otherwise the daemon will be started on the next nv invocation.
+if vim.g.nvim_socket_name then
+	local daemon_socket = vim.fn.stdpath("state") .. "/daemon.sock"
+	if vim.uv.fs_stat(daemon_socket) then
+		local ok, result = pcall(function()
+			local session = require("util.session")
+			return session.register(project_root, vim.g.nvim_socket_name, vim.g.neovim_orphan_group)
+		end)
+		if ok and type(result) == "table" and result.status == "dup" then
+			local redirect = require("util.redirect")
+			local skip_next = false
+			for i = 2, #vim.v.argv do
+				local arg = vim.v.argv[i]
+				if skip_next then
+					skip_next = false
+					goto continue_dup
+				end
+				if type(arg) ~= "string" or arg == "" then
+					goto continue_dup
+				end
+				if arg:sub(1, 1) == "-" then
+					if arg == "-c" or arg == "--cmd" or arg == "--listen" or arg == "-u" or arg == "--server" then
+						skip_next = true
+					end
+					goto continue_dup
+				end
+				local filepath = vim.fn.fnamemodify(arg, ":p")
+				if vim.fn.isdirectory(filepath) ~= 1 then
+					vim.fn.system({ "nvim", "--server", result.socket, "--remote", filepath })
+				end
+				::continue_dup::
+			end
+			redirect.bring_to_front()
+			vim.cmd("qa!")
+			return
+		end
+		if ok and result ~= false then
+			vim.g.daemon_registered = true
+		end
+	end
+end
 
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -127,36 +172,6 @@ require("lazy").setup("plugins", {
 vim.api.nvim_create_autocmd("UIEnter", {
 	once = true,
 	callback = function()
-		if should_register then
-			local session = require("util.session")
-			local result = session.register(project_root, vim.g.nvim_socket_name)
-			if result == false then
-				-- Daemon unreachable — instance works standalone but isn't routable
-				return
-			end
-			if type(result) == "table" and result.status == "dup" then
-				-- Duplicate instance for same project — route files and exit
-				local redirect = require("util.redirect")
-				for i = 2, #vim.v.argv do
-					local arg = vim.v.argv[i]
-					if type(arg) ~= "string" or arg == "" or arg:sub(1, 1) == "-" then
-						goto continue
-					end
-					local filepath = vim.fn.fnamemodify(arg, ":p")
-					if vim.fn.isdirectory(filepath) ~= 1 then
-						vim.fn.system({ "nvim", "--server", result.socket, "--remote", filepath })
-					end
-					::continue::
-				end
-				redirect.bring_to_front()
-				vim.cmd("qa!")
-				return
-			end
-			vim.g.daemon_registered = true
-		else
-			local session = require("util.session")
-			session.register(project_root, vim.g.nvim_socket_name, true)
-		end
 		if not vim.g.neovim_orphan_group then
 			vim.schedule(function()
 				vim.cmd("NvimTreeOpen")
