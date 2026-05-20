@@ -528,70 +528,72 @@ def _launch_orphan(filepath, verbose=False):
 
 
 def _launch_project(dirpath, verbose=False):
-	if verbose:
-		print(f"Launching project instance in {dirpath}", file=sys.stderr)
-	if sys.stdin.isatty():
-		env = _nvim_env()
-		os.execvpe("nvim", ["nvim", dirpath], env)
-	else:
-		_spawn_terminal_tab(["nvim", dirpath], cwd=dirpath, verbose=verbose)
+    if verbose:
+        print(f"Launching project instance in {dirpath}", file=sys.stderr)
+    if sys.stdin.isatty():
+        env = _nvim_env()
+        os.execvpe("nvim", ["nvim", dirpath], env)
+    else:
+        _spawn_terminal_tab(["nvim", dirpath], cwd=dirpath, verbose=verbose)
 
 
 def _launch_project_with_file(dirpath, filepath, line, col, verbose=False):
-	"""Launch a project instance and open a file at the given cursor position."""
-	if verbose:
-		print(f"Opening {filepath} in project {dirpath}", file=sys.stderr)
+    """Launch a project instance and open a file at the given cursor position."""
+    if verbose:
+        print(f"Opening {filepath} in project {dirpath}", file=sys.stderr)
 
-	if sys.stdin.isatty():
-		# TTY: open NvimTree via Lua, then edit file and position cursor
-		escaped = filepath.replace("\\", "\\\\").replace('"', '\\"')
-		pos_cmd = (
-			f"call cursor({line or 1}, {col})"
-			if col else str(line or 1)
-		)
-		lua_cmd = (
-			"lua "
-			"local ok, tree = pcall(require, 'nvim-tree'); "
-			"if ok then tree.open() end; "
-			f"vim.cmd('silent! e {escaped}'); "
-			f"vim.cmd('{pos_cmd} | wincmd w | wincmd w')"
-		)
-		cmd = ["nvim", dirpath, "-c", lua_cmd]
-		if verbose:
-			print(f"Launching: {' '.join(cmd)}", file=sys.stderr)
-		env = _nvim_env()
-		os.execvpe(cmd[0], cmd, env)
-	else:
-		# Non-TTY: launch project, poll daemon for registration, send file via --remote
-		try:
-			_spawn_terminal_tab(["nvim", dirpath], cwd=dirpath, verbose=verbose)
-		except Exception as e:
-			if verbose:
-				print(f"Failed to launch terminal: {e}", file=sys.stderr)
-			return
+    if sys.stdin.isatty():
+        # TTY: open NvimTree via Lua, then edit file and position cursor
+        # Escape for Lua single-quoted string, then use fnameescape for Vim safety
+        lua_escaped = filepath.replace("\\", "\\\\").replace("'", "\\'")
+        line_num = line or 1
+        if col is not None:
+            pos_cmd = f"call cursor({line_num}, {col})"
+        else:
+            pos_cmd = str(line_num)
+        lua_cmd = (
+            "lua "
+            "local ok, tree = pcall(require, 'nvim-tree'); "
+            "if ok then tree.open() end; "
+            "local f = vim.fn.fnameescape('" + lua_escaped + "'); "
+            "vim.cmd('silent! e ' .. f); "
+            "vim.cmd('" + pos_cmd + " | wincmd w | wincmd w')"
+        )
+        cmd = ["nvim", dirpath, "-c", lua_cmd]
+        if verbose:
+            print(f"Launching: {' '.join(cmd)}", file=sys.stderr)
+        env = _nvim_env()
+        os.execvpe(cmd[0], cmd, env)
+    else:
+        # Non-TTY: launch project, poll daemon for registration, send file via --remote
+        try:
+            _spawn_terminal_tab(["nvim", dirpath], cwd=dirpath, verbose=verbose)
+        except Exception as e:
+            if verbose:
+                print(f"Failed to launch terminal: {e}", file=sys.stderr)
+            return
 
-		for attempt in range(20):
-			time.sleep(0.5)
-			sock = _connect_daemon(verbose)
-			if not sock:
-				continue
-			try:
-				resp = _send_recv(sock, {"cmd": "list"}, verbose)
-				for inst in resp.get("instances", []):
-					if inst.get("project_root") == dirpath:
-						_nvim_remote(inst["socket"], filepath, line, col, verbose)
-						return
-			except (ConnectionError, json.JSONDecodeError, OSError):
-				pass
-			finally:
-				try:
-					sock.close()
-				except OSError:
-					pass
+        for attempt in range(20):
+            time.sleep(0.5)
+            if not os.path.exists(DAEMON_SOCKET):
+                continue
+            try:
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                sock.connect(DAEMON_SOCKET)
+                resp = _send_recv(sock, {"cmd": "list"}, verbose)
+                for inst in resp.get("instances", []):
+                    if inst.get("project_root") == dirpath:
+                        _nvim_remote(inst["socket"], filepath, line, col, verbose)
+                        sock.close()
+                        return
+                sock.close()
+            except (ConnectionRefusedError, ConnectionError, json.JSONDecodeError, OSError):
+                pass
 
-		if verbose:
-			print(f"Project instance did not appear within 10s, falling back to orphan", file=sys.stderr)
-		_launch_orphan(filepath, verbose)
+        if verbose:
+            print(f"Project instance did not appear within ~10s, falling back to orphan", file=sys.stderr)
+        _launch_orphan(filepath, verbose)
 
 
 def _parse_path_with_line(filepath):
@@ -620,134 +622,136 @@ def _parse_path_with_line(filepath):
 
 
 def main():
-	if not shutil.which("nvim"):
-		sys.exit("nvim-open: nvim not found in PATH. Is Neovim installed?")
+    if not shutil.which("nvim"):
+        sys.exit("nvim-open: nvim not found in PATH. Is Neovim installed?")
 
-	parser = argparse.ArgumentParser(description="Open file in correct Neovim instance")
-	parser.add_argument("path", nargs="?", help="Project directory or file to open (supports file:line:col)")
-	parser.add_argument("-g", "--goto", help="Open file at line:col (e.g., file.cs:10:5)")
-	parser.add_argument("--line", type=int, default=None, help="Line number")
-	parser.add_argument("--col", type=int, default=None, help="Column number")
-	parser.add_argument("--list", action="store_true", help="List registered instances")
-	parser.add_argument("--verbose", action="store_true", help="Enable debug logging to stderr")
-	args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="Open file in correct Neovim instance")
+    parser.add_argument("path", nargs="?", help="Project directory or file to open (supports file:line:col)")
+    parser.add_argument("-g", "--goto", help="Open file at line:col (e.g., file.cs:10:5)")
+    parser.add_argument("--line", type=int, default=None, help="Line number")
+    parser.add_argument("--col", type=int, default=None, help="Column number")
+    parser.add_argument("--list", action="store_true", help="List registered instances")
+    parser.add_argument("--verbose", action="store_true", help="Enable debug logging to stderr")
+    args = parser.parse_args()
 
-	if args.list:
-		sock = _connect_daemon(args.verbose)
-		if not sock:
-			print("No daemon running and could not start one.")
-			sys.exit(1)
-		resp = _send_recv(sock, {"cmd": "list"}, args.verbose)
-		sock.close()
-		instances = resp.get("instances", [])
-		if not instances:
-			print("No registered instances.")
-		else:
-			for inst in instances:
-				alive = ""
-				try:
-					os.kill(inst["pid"], 0)
-					alive = " [alive]"
-				except ProcessLookupError:
-					alive = " [DEAD]"
-				except PermissionError:
-					alive = " [alive]"
-				label = "(orphan)" if inst.get("orphan") else inst["project_root"]
-				print(f"{label} -> {inst['socket']}{alive}")
-		sys.exit(0)
+    if args.list:
+        sock = _connect_daemon(args.verbose)
+        if not sock:
+            print("No daemon running and could not start one.")
+            sys.exit(1)
+        resp = _send_recv(sock, {"cmd": "list"}, args.verbose)
+        sock.close()
+        instances = resp.get("instances", [])
+        if not instances:
+            print("No registered instances.")
+        else:
+            for inst in instances:
+                alive = ""
+                try:
+                    os.kill(inst["pid"], 0)
+                    alive = " [alive]"
+                except ProcessLookupError:
+                    alive = " [DEAD]"
+                except PermissionError:
+                    alive = " [alive]"
+                label = "(orphan)" if inst.get("orphan") else inst["project_root"]
+                print(f"{label} -> {inst['socket']}{alive}")
+        sys.exit(0)
 
-	# Resolve project directory and target file
-	project_dir = None
-	target_file = None
-	line = args.line
-	col = args.col
+    # Resolve project directory and target file
+    project_dir = None
+    target_file = None
+    line = args.line
+    col = args.col
 
-	# Parse -g goto file:line:col
-	if args.goto:
-		target_file, parsed_line, parsed_col = _parse_path_with_line(args.goto)
-		if line is None: line = parsed_line
-		if col is None: col = parsed_col
+    # Parse -g goto file:line:col
+    if args.goto:
+        target_file, parsed_line, parsed_col = _parse_path_with_line(args.goto)
+        if line is None:
+            line = parsed_line
+        if col is None:
+            col = parsed_col
 
-	# Resolve path (project dir or file)
-	if args.path:
-		resolved = os.path.realpath(args.path) if os.path.exists(args.path) else args.path
-		if os.path.isdir(resolved):
-			project_dir = resolved
-		elif not target_file:
-			# path is a file (not a dir) and no -g was given
-			target_file, parsed_line, parsed_col = _parse_path_with_line(args.path)
-			if line is None: line = parsed_line
-			if col is None: col = parsed_col
+    # Resolve path (project dir or file)
+    if args.path:
+        resolved = os.path.realpath(args.path) if os.path.exists(args.path) else args.path
+        if os.path.isdir(resolved):
+            project_dir = resolved
+        elif not target_file:
+            # path is a file (not a dir) and no -g was given
+            target_file, parsed_line, parsed_col = _parse_path_with_line(args.path)
+            if line is None: line = parsed_line
+            if col is None: col = parsed_col
 
-	# Resolve target file relative to project directory
-	if target_file and project_dir and not os.path.isabs(target_file):
-		target_file = os.path.join(project_dir, target_file)
+    # Resolve target file relative to project directory
+    if target_file and project_dir and not os.path.isabs(target_file):
+        target_file = os.path.join(project_dir, target_file)
 
-	# No file and no project — redirect to orphan or launch new one
-	if not target_file and not project_dir:
-		sock = _connect_daemon(args.verbose)
-		if sock:
-			resp = _send_recv(sock, {"cmd": "list"}, args.verbose)
-			sock.close()
-			for inst in resp.get("instances", []):
-				if inst.get("orphan"):
-					_focus_orphan(inst["socket"], args.verbose)
-					sys.exit(0)
-		_launch_orphan(None, args.verbose)
-		sys.exit(0)
+    # No file and no project — redirect to orphan or launch new one
+    if not target_file and not project_dir:
+        sock = _connect_daemon(args.verbose)
+        if sock:
+            resp = _send_recv(sock, {"cmd": "list"}, args.verbose)
+            sock.close()
+            for inst in resp.get("instances", []):
+                if inst.get("orphan"):
+                    _focus_orphan(inst["socket"], args.verbose)
+                    sys.exit(0)
+        _launch_orphan(None, args.verbose)
+        sys.exit(0)
 
-	# Project directory without file — launch or focus project
-	if project_dir and not target_file:
-		sock = _connect_daemon(args.verbose)
-		if sock:
-			resp = _send_recv(sock, {"cmd": "open", "path": project_dir}, args.verbose)
-			sock.close()
-			if resp["status"] == "routed":
-				sys.exit(0)
-		_launch_project(project_dir, args.verbose)
-		sys.exit(0)
+    # Project directory without file — launch or focus project
+    if project_dir and not target_file:
+        sock = _connect_daemon(args.verbose)
+        if sock:
+            resp = _send_recv(sock, {"cmd": "open", "path": project_dir}, args.verbose)
+            sock.close()
+            if resp["status"] == "routed":
+                sys.exit(0)
+        _launch_project(project_dir, args.verbose)
+        sys.exit(0)
 
-	# We have a file to open — resolve and route
-	filepath = target_file
-	try:
-		filepath = os.path.realpath(filepath)
-	except FileNotFoundError:
-		dirpart = os.path.realpath(os.path.dirname(target_file))
-		filepath = os.path.join(dirpart, os.path.basename(target_file))
+    # We have a file to open — resolve and route
+    filepath = target_file
+    try:
+        filepath = os.path.realpath(filepath)
+    except FileNotFoundError:
+        dirpart = os.path.realpath(os.path.dirname(target_file))
+        filepath = os.path.join(dirpart, os.path.basename(target_file))
 
-	is_dir = os.path.isdir(filepath)
-	if is_dir:
-		sock = _connect_daemon(args.verbose)
-		if sock:
-			resp = _send_recv(sock, {"cmd": "open", "path": filepath}, args.verbose)
-			sock.close()
-			if resp["status"] == "routed":
-				sys.exit(0)
-		_launch_project(filepath, args.verbose)
-		sys.exit(0)
+    is_dir = os.path.isdir(filepath)
+    if is_dir:
+        sock = _connect_daemon(args.verbose)
+        if sock:
+            resp = _send_recv(sock, {"cmd": "open", "path": filepath}, args.verbose)
+            sock.close()
+            if resp["status"] == "routed":
+                sys.exit(0)
+        _launch_project(filepath, args.verbose)
+        sys.exit(0)
 
-	sock = _connect_daemon(args.verbose)
-	if not sock:
-		sys.exit("nvim-open: could not connect to daemon")
+    sock = _connect_daemon(args.verbose)
+    if not sock:
+        sys.exit("nvim-open: could not connect to daemon")
 
-	resp = _send_recv(sock, {
-		"cmd": "open",
-		"path": filepath,
-		"line": line,
-		"col": col,
-	}, args.verbose)
-	sock.close()
+    resp = _send_recv(sock, {
+        "cmd": "open",
+        "path": filepath,
+        "line": line,
+        "col": col,
+    }, args.verbose)
+    sock.close()
 
-	if resp["status"] == "routed":
-		target_socket = resp["socket"]
-		if not _nvim_remote(target_socket, filepath, line, col, args.verbose):
-			if args.verbose:
-				print(f"Warning: could not send {filepath} to {target_socket}, file may not exist", file=sys.stderr)
-	elif resp["status"] == "no_instance":
-		if project_dir:
-			_launch_project_with_file(project_dir, filepath, line, col, args.verbose)
-		else:
-			_launch_orphan(filepath, args.verbose)
+    if resp["status"] == "routed":
+        target_socket = resp["socket"]
+        if not _nvim_remote(target_socket, filepath, line, col, args.verbose):
+            if args.verbose:
+                print(f"Warning: could not send {filepath} to {target_socket}, file may not exist", file=sys.stderr)
+    elif resp["status"] == "no_instance":
+        if project_dir:
+            _launch_project_with_file(project_dir, filepath, line, col, args.verbose)
+        else:
+            _launch_orphan(filepath, args.verbose)
 
 
 if __name__ == "__main__":
