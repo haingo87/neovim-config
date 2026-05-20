@@ -577,6 +577,7 @@ def _launch_project_with_file(dirpath, filepath, line, col, verbose=False):
             time.sleep(0.5)
             if not os.path.exists(DAEMON_SOCKET):
                 continue
+            sock = None
             try:
                 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 sock.settimeout(1)
@@ -585,11 +586,15 @@ def _launch_project_with_file(dirpath, filepath, line, col, verbose=False):
                 for inst in resp.get("instances", []):
                     if inst.get("project_root") == dirpath:
                         _nvim_remote(inst["socket"], filepath, line, col, verbose)
-                        sock.close()
                         return
-                sock.close()
             except (ConnectionRefusedError, ConnectionError, json.JSONDecodeError, OSError):
                 pass
+            finally:
+                if sock:
+                    try:
+                        sock.close()
+                    except OSError:
+                        pass
 
         if verbose:
             print(f"Project instance did not appear within ~10s, falling back to orphan", file=sys.stderr)
@@ -680,8 +685,10 @@ def main():
         elif not target_file:
             # path is a file (not a dir) and no -g was given
             target_file, parsed_line, parsed_col = _parse_path_with_line(args.path)
-            if line is None: line = parsed_line
-            if col is None: col = parsed_col
+            if line is None:
+                line = parsed_line
+            if col is None:
+                col = parsed_col
 
     # Resolve target file relative to project directory
     if target_file and project_dir and not os.path.isabs(target_file):
