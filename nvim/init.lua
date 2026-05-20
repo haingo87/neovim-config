@@ -15,6 +15,44 @@ for i = 2, #vim.v.argv do
 	end
 end
 
+if not project_dir then
+	-- Try vim.v.argv[1] as a file arg (the common case: nvim <filepath>)
+	local arg1 = vim.v.argv[1]
+	if type(arg1) == "string" and arg1 ~= "" and arg1:sub(1, 1) ~= "-" then
+		local abs = vim.fn.fnamemodify(arg1, ":p")
+		if vim.fn.isdirectory(abs) ~= 1 and vim.fn.filereadable(abs) == 1 then
+			project_dir = vim.fn.fnamemodify(abs, ":p:h")
+		end
+	end
+end
+
+if not project_dir then
+	for i = 2, #vim.v.argv do
+		local arg = vim.v.argv[i]
+		if type(arg) ~= "string" or arg == "" or arg:sub(1, 1) == "-" then
+			goto continue
+		end
+		-- Skip values of flags that take a non-file argument
+		if i > 1 then
+			local prev = vim.v.argv[i - 1]
+			if type(prev) == "string" then
+				local p = prev
+				if p == "--listen" or p == "-c" or p == "--cmd"
+					or p == "-u" or p == "--server"
+					or p == "--remote" or p == "--remote-silent" then
+					goto continue
+				end
+			end
+		end
+		local abs = vim.fn.fnamemodify(arg, ":p")
+		if vim.fn.isdirectory(abs) ~= 1 and vim.fn.filereadable(abs) == 1 then
+			project_dir = vim.fn.fnamemodify(abs, ":p:h")
+			break
+		end
+		::continue::
+	end
+end
+
 if project_dir then
 	vim.fn.chdir(project_dir)
 else
