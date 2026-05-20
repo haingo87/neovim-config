@@ -99,11 +99,11 @@ return {
 |-------|--------|-------------|
 | `features` | `csharp`, `unity`, `cpp`, `cmake`, `go`, `flutter`, `lua`, `debug`, `format_on_save` | Language features auto-enable LSP + formatter + DAP + treesitter |
 | `features.debug` | `true` / `false` | On by default — set to `false` to disable |
-| `features.format_on_save` | `true` / `false` | On by default — conform.nvim auto-format on save |
+| `features.format_on_save` | `true` / `false` | Off by default — set `true` to auto-format on save |
 | `exclude.files` | `string[]` | File globs to hide in telescope (and rg-based filtering) |
 | `exclude.dirs` | `string[]` | Directory names to hide in nvim-tree and telescope |
 
-**Feature defaults:** `debug` and `format_on_save` are enabled by default. Add `debug = false` to your `.nvproj` to opt out.
+**Feature defaults:** Only `debug` is enabled by default. Add `debug = false` to your `.nvproj` to opt out. `format_on_save` is opt-in — set `format_on_save = true` to enable.
 
 **Feature implications:** `unity` implies `csharp`, `flutter` implies `dart`.
 

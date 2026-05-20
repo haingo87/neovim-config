@@ -2,10 +2,9 @@
 -- Remove or comment out sections you don't need
 
 -- Copy this file to your project root and rename to `.nvproj`
--- Features enabled by default (set to false to disable):
---   debug, format_on_save
+-- Feature enabled by default (set to false to disable): debug
 --
--- Features must be explicitly enabled: csharp, unity, cpp, cmake, go, flutter, lua
+-- Language features must be explicitly enabled: csharp, unity, cpp, cmake, go, flutter, lua
 
 -- Example: C# / Unity project
 return {
@@ -14,7 +13,7 @@ return {
 		csharp = true,       -- roslyn LSP, csharpier, netcoredbg
 		-- unity = true,     -- implies csharp, uses nvim-dap-unity
 
-		-- Feature toggles (optional — on by default)
+		-- Opt-in feature toggles (disabled by default)
 		-- format_on_save = true,  -- conform.nvim auto-format on save
 	},
 	exclude = {
