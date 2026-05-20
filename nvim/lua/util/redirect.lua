@@ -32,7 +32,7 @@ end
 function M._macos_focus()
 	local proj = vim.g.project_dirname
 
-	-- Try to find the right tab by searching terminal tab titles for project dirname.
+	-- Try to find the right terminal by searching working directory or name for project dirname.
 	-- Dup instances don't have macos_terminal_app set, so try both Terminal.app and Ghostty.
 	if proj then
 		local function try_focus(app_name, is_ghostty)
@@ -40,19 +40,19 @@ function M._macos_focus()
 			if is_ghostty then
 				script = ('tell application "Ghostty"\n'
 					.. 'set projName to "%s"\n'
-					.. 'repeat with w in windows\n'
-					.. 'set tc to count of tabs of w\n'
-					.. 'repeat with t from 1 to tc\n'
-					.. 'try\n'
-					.. 'if title of tab t of w contains projName then\n'
-					.. 'select tab (tab t of w)\n'
-					.. 'activate\n'
-					.. 'return\n'
+					.. 'set matches to (every terminal whose working directory contains projName)\n'
+					.. 'if (count of matches) = 0 then\n'
+					.. 'set matches to (every terminal whose name contains projName)\n'
 					.. 'end if\n'
-					.. 'end try\n'
-					.. 'end repeat\n'
-					.. 'end repeat\n'
+					.. 'if (count of matches) > 0 then\n'
+					.. 'set t to item 1 of matches\n'
+					.. 'focus t\n'
+					.. 'end if\n'
+					.. 'return (count of matches)\n'
 					.. 'end tell'):format(proj)
+				local out = vim.fn.system({ "osascript", "-e", script })
+				local count = tonumber((out or ""):gsub("%s+", ""))
+				return count and count > 0
 			else
 				script = ('tell application "Terminal"\n'
 					.. 'set projName to "%s"\n'
@@ -61,13 +61,14 @@ function M._macos_focus()
 					.. 'if title of w contains projName then\n'
 					.. 'set frontmost of w to true\n'
 					.. 'activate\n'
-					.. 'return\n'
+					.. 'return "1"\n'
 					.. 'end if\n'
 					.. 'end try\n'
 					.. 'end repeat\n'
+					.. 'return "0"\n'
 					.. 'end tell'):format(proj)
+				return vim.fn.system({ "osascript", "-e", script }):gsub("%s+", "") == "1"
 			end
-			return vim.fn.system({ "osascript", "-e", script }) == ""
 		end
 
 		local app = vim.g.macos_terminal_app
