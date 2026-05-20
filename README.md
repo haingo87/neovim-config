@@ -1,26 +1,29 @@
 # Neovim Config — C#/Unity & C++/CMake IDE
 
-Personal DIY Neovim configuration optimized for C# (Unity) and C++ (CMake) development on macOS, with AI completion, VSCode keybindings, DAP debugging, and per-project environment switching.
+Personal DIY Neovim configuration optimized for C# (Unity), C++ (CMake), Go, and Dart/Flutter development on macOS, with AI completion, VSCode keybindings, DAP debugging, and per-project environment switching.
 
 ## Features
 
-- **Per-project `.nvproj` files** — language-specific plugins (roslyn/clangd), formatters, and debug adapters gated by a single Lua config file
-- **Smart file open (`nvim-open`)** — routes files opened from Finder, Unity, or terminal to the correct running Neovim instance based on project membership
-- **GitHub Copilot** — AI auto-complete via Tab (no chat panel)
+- **Per-project `.nvproj` files** — language-specific plugins (roslyn/clangd), formatters, and debug adapters gated by a single Lua config file with feature defaults and resolution
+- **`nv` CLI** — routes files opened from Finder, Unity, or terminal to the correct running Neovim instance based on project membership; supports VSCode-style `-g file:line:col` syntax
+- **Neovim.app** — native macOS app bundle (Swift launcher) for seamless Finder/Unity file opening via Apple Events
+- **AI completion** — minuet-ai.nvim (Groq/Gemini/Ollama) for inline AI suggestions + gen.nvim for AI code fixes
 - **DAP debugging** — full nvim-dap + dap-ui stack with VSCode F5/F9/F10/F11 keymaps
-- **LSP & formatting** — roslyn (C#), clangd (C++), stylua (Lua), csharpier/clang-format
+- **LSP & formatting** — roslyn (C#), clangd (C++), stylua (Lua), gopls (Go), dartls (Dart), csharpier/clang-format/gofumpt
+- **Daemon-managed LSP lifecycle** — async LSP server registry with grace period, shared clangd instances via socat bridge
 - **Catppuccin Mocha** — consistent theme across Neovim and Ghostty terminal
-- **VSCode-compatible keybindings** — Ctrl+W closes buffer, Ctrl+Tab buffer switching, F12 for LSP actions
+- **VSCode-compatible keybindings** — Ctrl+W closes buffer, Ctrl+Tab buffer switching, F12 for LSP actions, gj/gk wrap-friendly navigation
 - **Orphan instances** — files outside any project open in a lightweight instance with project plugins disabled
 
 ## Requirements
 
 - **Neovim** >= 0.10 (tested on 0.12.2)
 - **Git** (for lazy.nvim bootstrapping)
-- **Python 3** (for `nvim-open` script)
+- **Python 3** (for `nv` script)
 - **fd** (`brew install fd`) — for Telescope file search
 - **ripgrep** (`brew install ripgrep`) — for Telescope live grep
 - **make** (for telescope-fzf-native)
+- **socat** (`brew install socat`) — LSP stdio bridge for daemon-managed clangd
 - **JetBrains Mono Nerd Font** — for icons
 - **Ghostty** terminal (optional, config included)
 
@@ -29,32 +32,49 @@ Personal DIY Neovim configuration optimized for C# (Unity) and C++ (CMake) devel
 | Language | Tools |
 |----------|-------|
 | C# (Unity) | `roslyn` (via Mason), `csharpier`, `netcoredbg` |
-| C++ | `clangd`, `clang-format`, `codelldb` (via Mason) |
+| C++ | `clangd` (daemon-managed with socat bridge), `clang-format`, `codelldb` (via Mason) |
+| Go | `gopls`, `gofumpt`, `delve` |
+| Dart | `dartls`, `dart_format` |
 | Lua | `lua_ls`, `stylua` |
 
 ## Installation
+
+### macOS
 
 ```bash
 # Clone the repo
 git clone https://github.com/<user>/neovim-config.git /path/to/neovim-config
 
-# Symlink configs
-/path/to/neovim-config/link-config.sh
+# Run the macOS installer (symlinks configs, nv, nvim-daemon, Neovim.app)
+/path/to/neovim-config/install_mac.sh
 ```
 
-The `link-config.sh` script creates:
+The `install_mac.sh` script creates:
 - `~/.config/nvim` → `/path/to/neovim-config/nvim`
 - `~/.config/ghostty` → `/path/to/neovim-config/ghostty`
+- `/usr/local/bin/nv` → `/path/to/neovim-config/nvim-open`
+- `/usr/local/bin/nvim-daemon` → `/path/to/neovim-config/nvim-daemon`
+- `/Applications/Neovim.app` → `/path/to/neovim-config/Neovim.app`
+- Builds the native Swift launcher for the app bundle
 
-On first launch, lazy.nvim will install all plugins. Open Mason (`:Mason`) to install LSP servers and DAP adapters, or run `:MasonInstallAll`.
-
-Add `nvim-open` to your PATH:
+### Linux
 
 ```bash
-ln -sf /path/to/neovim-config/nvim-open ~/.local/bin/nvim-open
+/path/to/neovim-config/install_linux.sh
 ```
 
 On first launch, lazy.nvim will install all plugins. Open Mason (`:Mason`) to install LSP servers and DAP adapters, or run `:MasonInstallAll`.
+
+### Manual PATH setup
+
+If `install_mac.sh` doesn't suit your needs, symlink manually:
+
+```bash
+ln -sf /path/to/neovim-config/nvim-open /usr/local/bin/nv
+ln -sf /path/to/neovim-config/nvim-daemon /usr/local/bin/nvim-daemon
+```
+
+Then configure your editor to use `nv` as the external editor command.
 
 ## Project Configuration (`.nvproj` file)
 
@@ -63,36 +83,38 @@ Create a `.nvproj` file in your project root. It's a Lua module returning a tabl
 ```lua
 -- C# / Unity project
 return {
-    env = {
-        type = "csharp",
-    },
     features = {
-        debug = true,           -- nvim-dap + dap-ui + adapters
-        format_on_save = true,  -- conform.nvim auto-format
+        csharp = true,       -- roslyn LSP, csharpier, netcoredbg
+        -- unity = true,     -- implies csharp, uses nvim-dap-unity
+        -- format_on_save = true,  -- on by default
+    },
+    exclude = {
+        files = { "*.meta" },
+        dirs = { "Library", "Temp", "Build", "obj" },
     },
 }
-
--- C++ / CMake project
--- return {
---     env = { type = "cpp" },
---     features = { debug = true, format_on_save = true },
--- }
 ```
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `env.type` | `"csharp"`, `"cpp"` | Determines LSP server, debug adapter, treesitter parsers |
-| `features.debug` | `true` / `false` | Enables nvim-dap + dap-ui |
-| `features.format_on_save` | `true` / `false` | Auto-format on write via conform.nvim |
+| `features` | `csharp`, `unity`, `cpp`, `cmake`, `go`, `flutter`, `lua`, `debug`, `format_on_save` | Language features auto-enable LSP + formatter + DAP + treesitter |
+| `features.debug` | `true` / `false` | On by default — set to `false` to disable |
+| `features.format_on_save` | `true` / `false` | On by default — conform.nvim auto-format on save |
 | `exclude.files` | `string[]` | File globs to hide in telescope (and rg-based filtering) |
 | `exclude.dirs` | `string[]` | Directory names to hide in nvim-tree and telescope |
 
-Without a `.nvproj` file, the editor still works — neo-tree auto-opens, terminal title shows the folder name, basic LSP servers (lua_ls, jsonls, yamlls, marksman) are available. Project-specific plugins (roslyn, conform, nvim-dap) remain inactive.
+**Feature defaults:** `debug` and `format_on_save` are enabled by default. Add `debug = false` to your `.nvproj` to opt out.
 
-## Smart File Open (`nvim-open`)
+**Feature implications:** `unity` implies `csharp`, `flutter` implies `dart`.
+
+**Backward compatibility:** Old `env.type = "csharp"` is still detected but logs a deprecation warning. Migrate to `features = { csharp = true }`.
+
+Without a `.nvproj` file, the editor still works — neo-tree auto-opens, terminal title shows the folder name, basic LSP servers (jsonls, yamlls, marksman) are available. Project-specific plugins (roslyn, conform, nvim-dap) remain inactive.
+
+## Smart File Open (`nv`)
 
 ```
-nvim-open <file|directory>
+nv <file|directory> [-g file:line:col]
 ```
 
 | Argument | Behavior |
@@ -101,35 +123,41 @@ nvim-open <file|directory>
 | **File** outside any project | Routes to the shared orphan Neovim instance |
 | **Directory** with a running instance | Routes to the existing project instance |
 | **Directory** not yet open | Launches a new project instance |
+| `-g file:line:col` | VSCode-style open with cursor position (e.g., `nv -g src/foo.cs:42:10`) |
 
 ### OS Integration
 
-- **Unity**: Preferences → External Tools → External Script Editor → `nvim-open`
-- **Finder**: Set `nvim-open` as default handler for source file types
-- **Terminal**: `nvim-open src/foo.cs`
+- **Unity**: Preferences → External Tools → External Script Editor → `/usr/local/bin/nv`
+- **Finder**: Set `nv` as default handler via `nvim-open.desktop`
+- **Terminal**: `nv src/foo.cs`
 
 ### Daemon Architecture
 
-`nvim-open` is a pure file router. It does not detect projects or manage state — it delegates to `nvim-daemon`, a persistent background process.
+`nv` is a pure file router. It does not detect projects or manage state — it delegates to `nvim-daemon`, a persistent background process.
 
 **How it works:**
 1. `nvim-daemon` runs as a background process listening on a Unix domain socket (`~/.local/state/nvim/daemon.sock`)
 2. When Neovim starts, `init.lua` registers the instance with the daemon via `session.lua` + `daemon.lua` (socket-based JSON-lines protocol)
-3. When a file is opened, `nvim-open` asks the daemon which instance should receive it
+3. When a file is opened, `nv` asks the daemon which instance should receive it
 4. The daemon routes by path prefix matching against registered project roots, with an orphan fallback for files outside any project
 5. If a second Neovim instance starts in the same project, the daemon returns a `dup` response — the new instance routes its files to the existing one and exits
 
 **Duplicate prevention:** Starting `nvim` in a project directory with a running instance auto-exits after routing files to the existing instance using `nvim --server --remote` and `bring_to_front()`.
 
 **Redirect strategy:** When a `dup` instance exits, `redirect.lua` brings the original window to focus:
-- **macOS:** `osascript` to bring the terminal process to front
+- **macOS:** `osascript` to bring the terminal process to front; detects Ghostty/Apple Terminal and tracks window/tab IDs for precise tab-aware focus
 - **Linux X11:** `xdotool` to activate the terminal window and switch tabs via AT-SPI2 (`python-atspi`)
 - **tmux:** `tmux select-pane` to switch to the right pane
 - **SSH/Wayland:** Notification only (auto-focus unavailable)
 
+**Daemon-managed LSP:** The daemon also manages LSP server lifecycles:
+- `lsp_start` — starts LSP servers (e.g., clangd) as daemon subprocesses, returning a Unix socket path
+- `lsp_stop` — terminates LSP servers by PID, with dedup protection
+- Shared clangd instances: multiple Neovim sessions in the same C++ project share a single clangd process via a socat stdio bridge (`util.lsp`)
+
 **`nvproj` changes:** Updating `.nvproj` does not require a daemon restart. Use `:ProjectReload` to re-detect the environment.
 
-Inspect registered instances: `nvim-open --list`
+Inspect registered instances: `nv --list`
 
 ## Keybindings
 
@@ -140,12 +168,11 @@ Inspect registered instances: `nvim-open --list`
 | `Ctrl+W` | Close buffer |
 | `Ctrl+T` | Find files (Telescope) |
 | `Ctrl+Shift+F` | Live grep (Telescope) |
-| `Ctrl+Shift+P` | Command palette (Telescope) |
 | `Ctrl+Tab` | Next buffer (MRU order) |
 | `Ctrl+Shift+Tab` | Previous buffer (MRU order) |
 | `]b` | Next buffer (linear order) |
 | `[b` | Previous buffer (linear order) |
-| `Ctrl+N` | Toggle Neo-tree file explorer |
+| `Ctrl+N` | Toggle Nvim-tree file explorer |
 
 ### Editor
 
@@ -153,8 +180,8 @@ Inspect registered instances: `nvim-open --list`
 |-----|--------|
 | `Alt+Down/Up` | Move line/selection down/up |
 | `Ctrl+Shift+K` | Delete line |
-| `Ctrl+/` | Toggle comment |
 | `Ctrl+Backtick` | Toggle terminal (horizontal) |
+| `<Down>`, `<Up>` | Display-line navigation (gj/gk — wrap-friendly) |
 
 ### LSP
 
@@ -197,7 +224,8 @@ Inspect registered instances: `nvim-open --list`
 ## Plugins
 
 ### Completion & AI
-- **copilot.lua** — GitHub Copilot (Tab accepts ghost text)
+- **minuet-ai.nvim** — AI inline completion via Groq, Ollama, or Gemini
+- **gen.nvim** — AI-powered code fixes and text transformations
 - **nvim-cmp** — Completion engine with LSP, buffer, path, snippet sources
 - **LuaSnip** — Snippet expansion
 
@@ -207,7 +235,8 @@ Inspect registered instances: `nvim-open --list`
 - **nvim-lspconfig** — LSP server configuration
 - **lspsaga.nvim** — Enhanced LSP UI (hover, finder, code actions)
 - **roslyn.nvim** — C# Roslyn LSP (C# projects only)
-- **conform.nvim** — Formatting via csharpier, clang-format, stylua
+- **conform.nvim** — Formatting via csharpier, clang-format, stylua, gofumpt, dart_format
+- **util/lsp.lua** — Shared clangd setup with socat bridge for daemon-managed instances
 
 ### Editor
 - **nvim-tree.lua** — File explorer (project mode only)
@@ -217,6 +246,7 @@ Inspect registered instances: `nvim-open --list`
 - **bufdelete.nvim** — Safe buffer deletion
 - **Comment.nvim** — Comment toggling
 - **vim-sleuth** — Auto-detect indentation
+- **nvim-scrollview** — Scrollbar indicator
 
 ### Debug
 - **nvim-dap** — Debug adapter protocol client
@@ -242,7 +272,8 @@ Inspect registered instances: `nvim-open --list`
 | Command | Description |
 |---------|-------------|
 | `:ProjectReload` | Re-detect `.nvproj`, reinstall LSP/DAP, reload project plugins |
-| `nvim-open --list` | Show registered project instances with alive/dead status |
+| `:Totabs` | Convert spaces to tabs respecting `tabstop` |
+| `nv --list` | Show registered project instances with alive/dead status |
 
 ## File Structure
 
@@ -250,7 +281,7 @@ Inspect registered instances: `nvim-open --list`
 neovim-config/
 ├── ghostty/config              # Ghostty terminal config
 ├── nvim/
-│   ├── init.lua                # Entry point, server start, session lifecycle
+│   ├── init.lua                # Entry point, server start, session lifecycle, daemon LSP hooks
 │   ├── lazy-lock.json          # Plugin version lockfile
 │   └── lua/
 │       ├── config/
@@ -258,24 +289,34 @@ neovim-config/
 │       │   ├── keymaps.lua     # Keybindings
 │       │   └── autocmds.lua    # Autocommands
 │       ├── plugins/
-│       │   ├── completion.lua  # Copilot, nvim-cmp, LuaSnip
-│       │   ├── lsp.lua         # Mason, lspconfig, lspsaga
-│       │   ├── editor.lua      # Neo-tree, Telescope, bufferline, etc.
-│       │   ├── debug.lua       # nvim-dap, dap-ui, adapters
-│       │   ├── ui.lua          # Colorscheme, statusline, gitsigns, etc.
-│       │   ├── treesitter.lua  # Treesitter, autotag, Comment
-│       │   └── lang.lua        # roslyn, conform (project-gated)
+│       │   ├── completion.lua  # minuet-ai, gen.nvim, nvim-cmp, LuaSnip
+│       │   ├── lsp.lua         # Mason, lspconfig, lspsaga (feature-gated)
+│       │   ├── editor.lua      # Nvim-tree, Telescope, bufferline, which-key, etc.
+│       │   ├── debug.lua       # nvim-dap, dap-ui, adapters (feature-gated)
+│       │   ├── ui.lua          # Colorscheme, statusline, gitsigns, scrollview, etc.
+│       │   ├── treesitter.lua  # Treesitter, autotag, Comment, sleuth
+│       │   └── lang.lua        # roslyn, conform (feature-gated)
 │       └── util/
 │           ├── project.lua     # .nvproj detection, LSP/DAP setup
-│           ├── session.lua     # Instance registration via daemon socket
+│           ├── features.lua    # Feature resolution, defaults, implication, validation
+│           ├── session.lua     # Instance registration + lsp_start/lsp_stop helpers
 │           ├── daemon.lua      # Low-level daemon socket JSON-lines client
+│           ├── lsp.lua         # Shared clangd setup with socat bridge
 │           ├── redirect.lua    # Window focus for macOS/Linux/tmux/SSH
 │           └── hash.lua        # SHA-256 utility for socket names
+├── Neovim.app/                 # macOS app bundle for Finder/Unity file opening
+│   ├── Contents/
+│   │   ├── Info.plist          # App metadata, URL/document type handlers
+│   │   ├── MacOS/neovim        # Compiled Swift launcher binary
+│   │   └── Resources/icon.icns # App icon
+├── neovim-launcher.swift       # Swift source for native macOS Apple Event handling
 ├── nvim-daemon                 # Persistent background daemon (Unix socket, JSON-lines protocol)
-├── nvim-open                   # CLI script for smart file routing (talks to daemon)
-├── link-config.sh              # Symlink setup helper
-├── .nvproj.example            # Template .nvproj file
+├── nvim-open                   # CLI script for smart file routing (talks to daemon, supports -g flag)
+├── nvim-open.desktop           # Linux desktop entry for file association
+├── install_mac.sh              # macOS installation script (symlinks + app bundle build)
+├── install_linux.sh            # Linux installation script
+├── .nvproj.example            # Template .nvproj file with features table
 └── tests/
     ├── conftest.py             # Pytest fixtures (daemon startup/shutdown, temp sockets)
-    └── test_daemon.py          # Protocol and routing tests
+    └── test_daemon.py          # Protocol, routing, and LSP command tests
 ```
