@@ -31,29 +31,16 @@ end
 
 function M._macos_focus()
 	local win_id = vim.g.macos_window_id
-	local tab_idx = vim.g.macos_tab_index
 	local app = vim.g.macos_terminal_app
 
 	if win_id and app then
-		local lines
-		if tab_idx and app == "Ghostty" then
-			lines = {
-				"osascript", "-e",
-				"tell application \"" .. app .. "\"",
-				"-e", "activate",
-				"-e", "select tab (tab " .. tab_idx .. " of window id \"" .. win_id .. "\")",
-				"-e", "end tell",
-			}
-		else
-			lines = {
-				"osascript", "-e",
-				"tell application \"" .. app .. "\"",
-				"-e", "activate",
-				"-e", "set frontmost of window id \"" .. win_id .. "\" to true",
-				"-e", "end tell",
-			}
-		end
-		vim.fn.jobstart(lines, { detach = true })
+		vim.fn.jobstart({
+			"osascript", "-e",
+			"tell application \"" .. app .. "\"",
+			"-e", "activate",
+			"-e", "set frontmost of window id \"" .. win_id .. "\" to true",
+			"-e", "end tell",
+		}, { detach = true })
 		return
 	end
 

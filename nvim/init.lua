@@ -125,7 +125,7 @@ vim.api.nvim_create_autocmd("UIEnter", {
 			end)
 		end
 		require("util.redirect").init()
-		-- Detect macOS terminal window/tab for tab-aware window focus
+		-- Detect macOS terminal window for window-aware focus
 		if vim.env.TERM_PROGRAM then
 			local term = vim.env.TERM_PROGRAM
 			if term == "ghostty" or term == "Apple_Terminal" then
@@ -138,16 +138,6 @@ vim.api.nvim_create_autocmd("UIEnter", {
 					if win_id and win_id ~= "" then
 						vim.g.macos_window_id = win_id
 						vim.g.macos_terminal_app = app
-					end
-					if term == "ghostty" then
-						local tab_idx = vim.fn.system({
-							"osascript", "-e",
-							'tell application "Ghostty" to get index of selected tab of window 1',
-						}):gsub("%s+", "")
-						local n = tonumber(tab_idx)
-						if n then
-							vim.g.macos_tab_index = n
-						end
 					end
 				end)
 			end
