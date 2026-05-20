@@ -30,9 +30,52 @@ function M.bring_to_front()
 end
 
 function M._macos_focus()
+	local proj = vim.g.project_dirname
+
+	-- Try to find the right tab by searching terminal tab titles for project dirname
+	if proj then
+		local script
+		local app = vim.g.macos_terminal_app
+		if app == "Ghostty" or app == "Terminal" then
+			if app == "Ghostty" then
+				script = ('tell application "Ghostty"\n'
+					.. 'set projName to "%s"\n'
+					.. 'repeat with w in windows\n'
+					.. 'set tc to count of tabs of w\n'
+					.. 'repeat with t from 1 to tc\n'
+					.. 'try\n'
+					.. 'if title of tab t of w contains projName then\n'
+					.. 'select tab (tab t of w)\n'
+					.. 'activate\n'
+					.. 'return\n'
+					.. 'end if\n'
+					.. 'end try\n'
+					.. 'end repeat\n'
+					.. 'end repeat\n'
+					.. 'end tell'):format(proj)
+			else
+				script = ('tell application "Terminal"\n'
+					.. 'set projName to "%s"\n'
+					.. 'repeat with w in windows\n'
+					.. 'try\n'
+					.. 'if title of w contains projName then\n'
+					.. 'set frontmost of w to true\n'
+					.. 'activate\n'
+					.. 'return\n'
+					.. 'end if\n'
+					.. 'end try\n'
+					.. 'end repeat\n'
+					.. 'end tell'):format(proj)
+			end
+			if vim.fn.system({ "osascript", "-e", script }) == "" then
+				return
+			end
+		end
+	end
+
+	-- Fallback: activate cached window
 	local win_id = vim.g.macos_window_id
 	local app = vim.g.macos_terminal_app
-
 	if win_id and app then
 		vim.fn.jobstart({
 			"osascript", "-e",
@@ -44,6 +87,7 @@ function M._macos_focus()
 		return
 	end
 
+	-- Fallback: activate by process name
 	local terminal = vim.env.TERM_PROGRAM
 	local process_name = "Terminal"
 	if terminal == "iTerm.app" then
