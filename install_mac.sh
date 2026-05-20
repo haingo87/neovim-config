@@ -32,7 +32,7 @@ link "$REPO_DIR/Neovim.app" "/Applications/Neovim.app"
 # Compile the native macOS launcher (handles Apple Events from Finder/Unity)
 if command -v swiftc &>/dev/null; then
 	echo "Building Neovim.app native launcher..."
-	swiftc -o "$REPO_DIR/Neovim.app/Contents/MacOS/neovim" "$REPO_DIR/neovim-launcher.swift" -framework Cocoa
+	swiftc -o "$REPO_DIR/Neovim.app/Contents/MacOS/nv" "$REPO_DIR/neovim-launcher.swift" -framework Cocoa
 	echo "OK: Neovim.app launcher built"
 else
 	echo "WARN: swiftc not found. Install Xcode Command Line Tools: xcode-select --install"

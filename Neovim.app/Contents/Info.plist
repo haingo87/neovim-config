@@ -5,7 +5,7 @@
 	<key>CFBundleIconFile</key>
 	<string>icon</string>
 	<key>CFBundleExecutable</key>
-	<string>neovim</string>
+	<string>nv</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.gamiable.neovim</string>
 	<key>CFBundleName</key>
