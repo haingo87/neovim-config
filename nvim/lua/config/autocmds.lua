@@ -59,6 +59,15 @@ autocmd({ "BufRead", "BufNewFile" }, {
 	end,
 })
 
+--- Treat .nvproj as Lua for syntax highlighting and LSP ---
+autocmd({ "BufRead", "BufNewFile" }, {
+	group = general,
+	pattern = "*.nvproj",
+	callback = function()
+		vim.bo.filetype = "lua"
+	end,
+})
+
 --- Delete terminal buffer when its process exits (prevents buffer accumulation) ---
 -- Community-known issue: nvim-tree/nvim-tree.lua#2, #2014, #1368
 -- Terminal buffers accumulate as hidden listed buffers after process exit + :q.
