@@ -101,14 +101,11 @@ return {
 
 			if f.has("dart") then
 				vim.lsp.config("dartls", {
-					cmd = {
-						"dart",
-						"language-server",
-						"--protocol=lsp",
-					},
+					cmd = { "dart", "language-server", "--protocol=lsp" },
 					filetypes = { "dart" },
+					root_dir = vim.fs.root(vim.g.initial_cwd, { "pubspec.yaml" }) or vim.g.initial_cwd,
 					init_options = {
-						onlyAnalyzeProjectsWithOpenFiles = false,
+						onlyAnalyzeProjectsWithOpenFiles = true,
 					},
 				})
 				vim.lsp.enable("dartls")
