@@ -109,6 +109,22 @@ return {
 					},
 				})
 				vim.lsp.enable("dartls")
+
+				local project_root = vim.fn.resolve(vim.g.initial_cwd)
+				vim.api.nvim_create_autocmd("LspAttach", {
+					callback = function(args)
+						local client = vim.lsp.get_client_by_id(args.data.client_id)
+						if client and client.name == "dartls" then
+							local filepath = vim.api.nvim_buf_get_name(args.buf)
+							if filepath ~= "" then
+								local resolved = vim.fn.resolve(filepath)
+								if not vim.startswith(resolved, project_root) then
+									vim.lsp.buf_detach_client(args.buf, client.id)
+								end
+							end
+						end
+					end,
+				})
 			end
 		end,
 	},
